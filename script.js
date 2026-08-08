@@ -360,7 +360,6 @@ async function createCategory(e) {
 
     if (!name) return;
 
-    // Le champ image est "required" dans le formulaire (input#category-image-file).
     const imageInput = document.getElementById("category-image-file");
     if (!imageInput || !imageInput.files || !imageInput.files[0]) {
         showToast('error', "Veuillez sélectionner une image pour la catégorie.");
@@ -381,22 +380,40 @@ async function createCategory(e) {
             renderApp();
             nameInput.value = "";
             if (imageInput) imageInput.value = "";
+            showToast('success', "Catégorie créée avec succès !");
         } else {
-            console.error("Erreur lors de la création de la catégorie :", await response.text());
+            console.error("Erreur lors de la création :", await response.text());
+            showToast('error', "Erreur lors de la création de la catégorie.");
         }
     } catch (err) {
-        console.error("Erreur lors de la création de la catégorie :", err);
+        console.error("Erreur réseau :", err);
+        showToast('error', "Impossible de contacter le serveur.");
     }
 }
-function deleteCategory(catId, event) {
+
+async function deleteCategory(catId, event) {
   if (event) event.stopPropagation();
   if (confirm("Voulez-vous vraiment supprimer cette catégorie et tous ses produits ?")) {
-    categories = categories.filter(c => c.id !== catId);
-    if (activeCategoryViewId === catId) {
-      activeCategoryViewId = null;
-      currentView = 'categories';
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/categories/${catId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        categories = categories.filter(c => c.id !== catId);
+        if (activeCategoryViewId === catId) {
+          activeCategoryViewId = null;
+          currentView = 'categories';
+        }
+        showToast('success', "Catégorie supprimée.");
+        renderApp();
+      } else {
+        showToast('error', "Échec de la suppression sur le serveur.");
+      }
+    } catch (err) {
+      console.error("Erreur réseau :", err);
+      showToast('error', "Erreur de connexion au serveur.");
     }
-    saveData();
   }
 }
 
@@ -427,15 +444,32 @@ async function handleCategoryEditSubmit(e) {
   const cat = categories.find(c => c.id === catId);
   if (!cat) return;
 
-  cat.name = name;
+  let image = cat.image;
   if (fileInput.files.length > 0) {
-    cat.image = await fileToBase64(fileInput.files[0]);
+    image = await fileToBase64(fileInput.files[0]);
   }
 
-  closeEditCategoryModal();
-  saveData();
-}
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/categories/${catId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, image })
+    });
 
+    if (response.ok) {
+      cat.name = name;
+      cat.image = image;
+      closeEditCategoryModal();
+      showToast('success', "Catégorie mise à jour !");
+      renderApp();
+    } else {
+      showToast('error', "Échec de la mise à jour côté serveur.");
+    }
+  } catch (err) {
+    console.error("Erreur mise à jour catégorie :", err);
+    showToast('error', "Erreur lors de la mise à jour.");
+  }
+}
 // ==================== CATALOGUE LOGIC ====================
 
 async function createCatalogue(e) {
@@ -544,17 +578,40 @@ async function createPost(e) {
   if (rawTarget && title && content && fileInput.files.length > 0) {
     const [type, targetId] = rawTarget.split(':');
     const targetContainer = findContainer(type, targetId);
+
     if (targetContainer) {
       const imageBase64 = await fileToBase64(fileInput.files[0]);
-      targetContainer.posts.unshift({
-        id: 'post-' + Date.now(),
-        title, content, image: imageBase64
-      });
-      document.getElementById('post-title').value = '';
-      document.getElementById('post-content').value = '';
-      fileInput.value = '';
-      showToast('success', 'Produit ajouté !');
-      saveData();
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/posts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            content,
+            image: imageBase64,
+            categoryId: type === 'category' ? targetId : null,
+            catalogueId: type === 'catalogue' ? targetId : null
+          })
+        });
+
+        if (response.ok) {
+          const newPost = await response.json();
+          targetContainer.posts.unshift(newPost);
+
+          document.getElementById('post-title').value = '';
+          document.getElementById('post-content').value = '';
+          fileInput.value = '';
+
+          showToast('success', 'Produit ajouté !');
+          renderApp();
+        } else {
+          showToast('error', "Erreur lors de la création du produit.");
+        }
+      } catch (err) {
+        console.error("Erreur serveur :", err);
+        showToast('error', "Erreur de connexion au serveur.");
+      }
     }
   }
 }
@@ -595,28 +652,60 @@ async function handleQuickAddProductSubmit(e) {
   const targetContainer = findContainer(type, containerId);
   if (targetContainer && title && content && fileInput.files.length > 0) {
     const imageBase64 = await fileToBase64(fileInput.files[0]);
-    targetContainer.posts.unshift({
-      id: 'post-' + Date.now(),
-      title, content, image: imageBase64
-    });
-    closeQuickAddProductModal();
-    showToast('success', 'Produit ajouté !');
-    saveData();
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/posts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          content,
+          image: imageBase64,
+          categoryId: type === 'category' ? containerId : null,
+          catalogueId: type === 'catalogue' ? containerId : null
+        })
+      });
+
+      if (response.ok) {
+        const newPost = await response.json();
+        targetContainer.posts.unshift(newPost);
+        closeQuickAddProductModal();
+        showToast('success', 'Produit ajouté !');
+        renderApp();
+      } else {
+        showToast('error', "Erreur serveur lors de l'ajout rapide.");
+      }
+    } catch (err) {
+      console.error("Erreur réseau :", err);
+      showToast('error', "Erreur de connexion au serveur.");
+    }
   }
 }
-
-function deletePost(type, containerId, postId, event) {
+async function deletePost(type, containerId, postId, event) {
   if (event) event.stopPropagation();
   if (confirm("Voulez-vous supprimer ce produit ?")) {
-    const container = findContainer(type, containerId);
-    if (container) {
-      container.posts = container.posts.filter(p => p.id !== postId);
-      if (activeProductId === postId) {
-        activeProductId = null;
-        currentView = type === 'catalogue' ? 'single-catalogue' : 'single-category';
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/posts/${postId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        const container = findContainer(type, containerId);
+        if (container) {
+          container.posts = container.posts.filter(p => p.id !== postId);
+          if (activeProductId === postId) {
+            activeProductId = null;
+            currentView = type === 'catalogue' ? 'single-catalogue' : 'single-category';
+          }
+          showToast('success', 'Produit supprimé.');
+          renderApp();
+        }
+      } else {
+        showToast('error', "Erreur lors de la suppression du produit.");
       }
-      showToast('success', 'Produit supprimé.');
-      saveData();
+    } catch (err) {
+      console.error("Erreur réseau :", err);
+      showToast('error', "Impossible de contacter le serveur.");
     }
   }
 }

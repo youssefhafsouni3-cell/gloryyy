@@ -4,9 +4,8 @@
 const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? 'http://localhost:5000'
   : 'https://gloryyy.onrender.com';
-let users = JSON.parse(localStorage.getItem('ga_users')) || [
-  { user: 'admin', pass: 'admin', role: 'admin' }
-];
+// Les comptes utilisateurs vivent désormais en base (Postgres/Prisma) ; on ne garde
+// en local que la session de l'utilisateur actuellement connecté.
 let currentUser = JSON.parse(localStorage.getItem('ga_current_user')) || null;
 let categories = JSON.parse(localStorage.getItem('ga_categories')) || [
   { id: 'cat-1', name: 'Category 1', image: '', posts: [] },
@@ -131,25 +130,32 @@ function togglePassword(inputId, iconId) {
   }
 }
 
-function handleAuthLogin(e) {
+async function handleAuthLogin(e) {
   e.preventDefault();
-  const u = document.getElementById('login-username').value.trim();
-  const p = document.getElementById('login-password').value.trim();
+  const email = document.getElementById('login-email').value.trim().toLowerCase();
+  const password = document.getElementById('login-password').value.trim();
 
-  const account = users.find(acc => acc.user === u);
-  if (!account) {
-    showToast('error', "Ce nom d'utilisateur n'existe pas.");
-    return;
-  }
-  if (account.pass !== p) {
-    showToast('error', "Votre mot de passe est incorrect.");
-    return;
-  }
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await response.json();
 
-  currentUser = account;
-  currentView = 'categories';
-  saveData();
-  showToast('success', `Bienvenue, ${account.user} !`);
+    if (!response.ok) {
+      showToast('error', data.error || "Email ou mot de passe incorrect.");
+      return;
+    }
+
+    currentUser = data;
+    currentView = 'categories';
+    localStorage.setItem('ga_current_user', JSON.stringify(currentUser));
+    showToast('success', `Bienvenue, ${data.username} !`);
+    renderApp();
+  } catch (err) {
+    showToast('error', "Erreur de connexion au serveur.");
+  }
 }
 
 // ==================== REGISTRATION WITH EMAIL VERIFICATION ====================
@@ -166,18 +172,11 @@ function generateVerificationCode() {
 function handleAuthRegister(e) {
   e.preventDefault();
   const u = document.getElementById('reg-username').value.trim();
-  const email = document.getElementById('reg-email').value.trim();
+  const email = document.getElementById('reg-email').value.trim().toLowerCase();
   const p = document.getElementById('reg-password').value.trim();
 
-  if (users.find(acc => acc.user === u)) {
-    showToast('error', "Ce nom d'utilisateur est déjà pris.");
-    return;
-  }
-  if (users.find(acc => acc.email && acc.email.toLowerCase() === email.toLowerCase())) {
-    showToast('error', "Un compte existe déjà avec cet email.");
-    return;
-  }
-
+  // L'unicité de l'email (et du nom d'utilisateur) est désormais vérifiée côté backend
+  // au moment de la création réelle du compte, une fois le code de vérification confirmé.
   pendingRegistration = {
     username: u,
     email: email,
@@ -254,7 +253,7 @@ function resendVerificationCode() {
   sendVerificationEmail(pendingRegistration);
 }
 
-function handleVerifyCode(e) {
+async function handleVerifyCode(e) {
   e.preventDefault();
   if (!pendingRegistration) return;
   const entered = document.getElementById('verify-code').value.trim();
@@ -264,19 +263,33 @@ function handleVerifyCode(e) {
     return;
   }
 
-  const newUser = {
-    user: pendingRegistration.username,
-    email: pendingRegistration.email,
-    pass: pendingRegistration.pass,
-    memberId: pendingRegistration.memberId,
-    role: 'user'
-  };
-  users.push(newUser);
-  currentUser = newUser;
-  currentView = 'categories';
-  pendingRegistration = null;
-  saveData();
-  showToast('success', `Compte créé ! Votre ID Membre est ${newUser.memberId}`);
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: pendingRegistration.username,
+        email: pendingRegistration.email,
+        password: pendingRegistration.pass
+      })
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      showToast('error', data.error || "Impossible de créer le compte.");
+      backToRegisterStep();
+      return;
+    }
+
+    currentUser = data;
+    currentView = 'categories';
+    localStorage.setItem('ga_current_user', JSON.stringify(currentUser));
+    pendingRegistration = null;
+    showToast('success', `Compte créé ! Votre ID Membre est ${data.memberId}`);
+    renderApp();
+  } catch (err) {
+    showToast('error', "Erreur de connexion au serveur.");
+  }
 }
 
 function handleLogout() {
@@ -376,10 +389,6 @@ async function createCategory(e) {
 
         if (response.ok) {
             const newCategory = await response.json();
-            
-            // Correction lil-erreur mta3 undefined length:
-            if (!newCategory.posts) newCategory.posts = [];
-
             categories.push(newCategory);
             renderApp();
             nameInput.value = "";

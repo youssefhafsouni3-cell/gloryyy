@@ -376,6 +376,10 @@ async function createCategory(e) {
 
         if (response.ok) {
             const newCategory = await response.json();
+            
+            // Correction lil-erreur mta3 undefined length:
+            if (!newCategory.posts) newCategory.posts = [];
+
             categories.push(newCategory);
             renderApp();
             nameInput.value = "";

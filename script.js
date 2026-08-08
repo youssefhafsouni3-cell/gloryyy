@@ -1,10 +1,9 @@
 // ==================== STATE MANAGEMENT ====================
-// Sur localhost, le frontend (ex: Live Server, port 5500) et le backend Express (port 5000)
-// tournent souvent sur des ports différents -> window.location.origin pointerait alors vers
-// le frontend lui-même, d'où les 404 sur /api/*. On cible explicitement le backend dans ce cas.
+// En local (Live Server, etc.) -> backend Express local sur le port 5000.
+// En production (site déployé sur Netlify) -> backend déployé sur Render.
 const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? 'http://localhost:5000'
-  : window.location.origin;
+  : 'https://gloryyy.onrender.com';
 let users = JSON.parse(localStorage.getItem('ga_users')) || [
   { user: 'admin', pass: 'admin', role: 'admin' }
 ];

@@ -26,7 +26,6 @@ const transporter = nodemailer.createTransport({
 // ==================== AUTHENTICATION ====================
 
 // 1. Login via email + password
-// في prisma/server.js
 app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -35,7 +34,7 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ error: "Champs manquants." });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    let user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       return res.status(400).json({ error: "Email ou mot de passe incorrect." });
     }
@@ -45,11 +44,20 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ error: "Email ou mot de passe incorrect." });
     }
 
+    // 👈 إضافة ترقية دور الأدمن إذا كان هذا هو بريدك الخاص
+    const ADMIN_EMAIL = 'gloryaures@gmail.com'; // ضع بريدك الإلكتروني هنا
+    if (email === ADMIN_EMAIL && user.role !== 'ADMIN') {
+      user = await prisma.user.update({
+        where: { email },
+        data: { role: 'ADMIN' }
+      });
+    }
+
     const { password: _, ...userWithoutPassword } = user;
     res.json({ message: "Connexion réussie", user: userWithoutPassword });
 
   } catch (error) {
-    console.error("LOGIN ERROR DETAILS:", error); // 👈 هذا السطر هو ما سيظهر في Logs منصة Render
+    console.error("LOGIN ERROR DETAILS:", error);
     res.status(500).json({ error: "Erreur serveur", details: error.message });
   }
 });

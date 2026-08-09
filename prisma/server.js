@@ -34,7 +34,8 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ error: "Champs manquants." });
     }
 
-    let user = await prisma.user.findUnique({ where: { email } });
+    const normalizedEmail = email.toLowerCase();
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (!user) {
       return res.status(400).json({ error: "Email ou mot de passe incorrect." });
     }
@@ -42,15 +43,6 @@ app.post('/api/login', async (req, res) => {
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) {
       return res.status(400).json({ error: "Email ou mot de passe incorrect." });
-    }
-
-    // 👈 إضافة ترقية دور الأدمن إذا كان هذا هو بريدك الخاص
-    const ADMIN_EMAIL = 'gloryaures@gmail.com'; // ضع بريدك الإلكتروني هنا
-    if (email === ADMIN_EMAIL && user.role !== 'ADMIN') {
-      user = await prisma.user.update({
-        where: { email },
-        data: { role: 'ADMIN' }
-      });
     }
 
     const { password: _, ...userWithoutPassword } = user;

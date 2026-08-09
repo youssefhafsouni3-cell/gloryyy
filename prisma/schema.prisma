@@ -14,7 +14,6 @@ model User {
   password String
   role     String  @default("user")
   memberId String?
-  orders   Order[]
 }
 
 model Category {
@@ -36,9 +35,24 @@ model Post {
 }
 
 model Order {
+  id            String   @id @default(uuid())
+  username      String?
+  productTitle  String?
+  productImage  String?
+  categoryName  String?
+  fullname      String?
+  email         String?
+  phone         String?
+  quantity      Int      @default(1)
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+}
+
+model Catalogue {
   id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  total     Float
+  name      String
+  dateFrom  String?
+  dateTo    String?
+  image     String
   createdAt DateTime @default(now())
 }

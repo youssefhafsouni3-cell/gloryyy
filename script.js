@@ -203,15 +203,15 @@ function generateMemberId() {
 
 async function handleAuthRegister(e) {
   e.preventDefault();
-  
+
   const username = document.getElementById('reg-username').value.trim();
-  const email = document.getElementById('reg-email').value.trim();
+  const email = document.getElementById('reg-email').value.trim().toLowerCase();
   const password = document.getElementById('reg-password').value.trim();
 
   const btnSubmit = document.getElementById('btn-reg-submit');
   if (btnSubmit) {
     btnSubmit.disabled = true;
-    btnSubmit.innerText = "Création en cours...";
+    btnSubmit.innerText = "Envoi du code...";
   }
 
   try {
@@ -226,8 +226,11 @@ async function handleAuthRegister(e) {
     const data = await res.json();
 
     if (res.ok) {
-      showToast('success', "Compte créé avec succès ! Vous pouvez vous connecter.");
-      switchAuthTab('login'); // يرجعك لصفحة الـ Login
+      // Le code réel a été généré et envoyé par le backend (nodemailer) — on ne connaît
+      // pas sa valeur ici, on attend juste que l'utilisateur le saisisse.
+      pendingRegistration = { username, email, password };
+      showToast('success', "Code de vérification envoyé par email.");
+      showVerificationStep();
     } else {
       showToast('error', data.error || "Erreur lors de l'inscription.");
     }
@@ -238,51 +241,6 @@ async function handleAuthRegister(e) {
     if (btnSubmit) {
       btnSubmit.disabled = false;
       btnSubmit.innerText = "Créer un compte";
-    }
-  }
-}
-
-function sendVerificationEmail(reg) {
-  if (!reg || !reg.email) {
-    showToast('error', "Adresse email manquante.");
-    return;
-  }
-
-  const btn = document.getElementById('btn-reg-submit');
-  if (btn) { 
-    btn.disabled = true; 
-    btn.innerText = 'Envoi du code...'; 
-  }
-
-  const templateParams = {
-    to_email: reg.email,
-    email: reg.email,
-    user_email: reg.email,
-    to_name: reg.username || 'Utilisateur',
-    code: reg.code,
-    verification_code: reg.code,
-    member_id: reg.memberId
-  };
-
-  if (typeof emailjs !== 'undefined') {
-    emailjs.send('service_1il1jx5', 'template_k2mx7ri', templateParams)
-      .then((response) => {
-        showToast('success', "Code de vérification envoyé à " + reg.email);
-      })
-      .catch((err) => {
-        showToast('error', "Échec de l'envoi : " + (err.text || "Erreur serveur"));
-      })
-      .finally(() => {
-        if (btn) { 
-          btn.disabled = false; 
-          btn.innerText = 'Créer un compte'; 
-        }
-      });
-  } else {
-    showToast('error', "Le SDK EmailJS n'est pas chargé.");
-    if (btn) { 
-      btn.disabled = false; 
-      btn.innerText = 'Créer un compte'; 
     }
   }
 }
@@ -300,35 +258,56 @@ function backToRegisterStep() {
   document.getElementById('auth-step-credentials').classList.remove('hidden');
 }
 
-function resendVerificationCode() {
+async function resendVerificationCode() {
   if (!pendingRegistration) return;
-  pendingRegistration.code = generateVerificationCode();
-  sendVerificationEmail(pendingRegistration);
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/register-pending`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: pendingRegistration.username,
+        email: pendingRegistration.email,
+        password: pendingRegistration.password
+      })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast('success', "Nouveau code envoyé par email.");
+    } else {
+      showToast('error', data.error || "Impossible de renvoyer le code.");
+    }
+  } catch (err) {
+    showToast('error', "Impossible de contacter le serveur.");
+  }
 }
 
-function handleVerifyCode(e) {
+async function handleVerifyCode(e) {
   e.preventDefault();
   if (!pendingRegistration) return;
   const entered = document.getElementById('verify-code').value.trim();
 
-  if (entered !== pendingRegistration.code) {
-    showToast('error', "Le code de vérification est incorrect.");
-    return;
-  }
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/verify-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingRegistration.email, code: entered })
+    });
+    const data = await res.json();
 
-  const newUser = {
-    user: pendingRegistration.username,
-    email: pendingRegistration.email,
-    pass: pendingRegistration.pass,
-    memberId: pendingRegistration.memberId,
-    role: 'user'
-  };
-  users.push(newUser);
-  currentUser = newUser;
-  currentView = 'categories';
-  pendingRegistration = null;
-  saveData();
-  showToast('success', `Compte créé ! Votre ID Membre est ${newUser.memberId}`);
+    if (!res.ok) {
+      showToast('error', data.error || "Le code de vérification est incorrect.");
+      return;
+    }
+
+    currentUser = data;
+    currentView = 'categories';
+    pendingRegistration = null;
+    localStorage.setItem('ga_current_user', JSON.stringify(currentUser));
+    showToast('success', `Compte créé ! Votre ID Membre est ${data.memberId}`);
+    renderApp();
+  } catch (err) {
+    showToast('error', "Impossible de contacter le serveur.");
+  }
 }
 
 function handleLogout() {

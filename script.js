@@ -1263,8 +1263,12 @@ function renderApp() {
       });
     }
   } else {
+    // إخفاء الأزرار والإشعارات الخاصة بالمشرف تماماً للمستخدم العادي
     if (navAdminBtn) navAdminBtn.classList.add('hidden');
     if (adminNotifWrapper) adminNotifWrapper.classList.add('hidden');
+    if (currentView === 'admin') {
+      currentView = 'home'; // منع البقاء في صفحة المشرف إذا حاول الدخول إليها
+    }
   }
 
   if (selectMenu) {
@@ -1519,7 +1523,6 @@ function renderApp() {
   }
 }
 
-// EL-CODE EL-JDID
 document.addEventListener('DOMContentLoaded', async () => {
   if (typeof loadData === 'function') {
     await loadData();

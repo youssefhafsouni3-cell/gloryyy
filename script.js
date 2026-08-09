@@ -4,8 +4,9 @@
 const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? 'http://localhost:5000'
   : 'https://gloryyy.onrender.com';
-// Les comptes utilisateurs vivent désormais en base (Postgres/Prisma) ; on ne garde
-// en local que la session de l'utilisateur actuellement connecté.
+let users = JSON.parse(localStorage.getItem('ga_users')) || [
+  { user: 'admin', pass: 'admin', role: 'admin' }
+];
 let currentUser = JSON.parse(localStorage.getItem('ga_current_user')) || null;
 let categories = JSON.parse(localStorage.getItem('ga_categories')) || [
   { id: 'cat-1', name: 'Category 1', image: '', posts: [] },
@@ -130,6 +131,34 @@ function togglePassword(inputId, iconId) {
   }
 }
 
+function toggleMobileMenu() {
+  const menu = document.getElementById('mobile-menu');
+  const icon = document.getElementById('mobile-menu-icon');
+  const btn = document.getElementById('mobile-menu-btn');
+  const isHidden = menu.classList.contains('hidden');
+  if (isHidden) {
+    menu.classList.remove('hidden');
+    menu.classList.add('flex');
+    icon.classList.replace('fa-bars', 'fa-xmark');
+    btn.setAttribute('aria-expanded', 'true');
+  } else {
+    menu.classList.add('hidden');
+    menu.classList.remove('flex');
+    icon.classList.replace('fa-xmark', 'fa-bars');
+    btn.setAttribute('aria-expanded', 'false');
+  }
+}
+
+function closeMobileMenu() {
+  const menu = document.getElementById('mobile-menu');
+  const icon = document.getElementById('mobile-menu-icon');
+  const btn = document.getElementById('mobile-menu-btn');
+  menu.classList.add('hidden');
+  menu.classList.remove('flex');
+  icon.classList.replace('fa-xmark', 'fa-bars');
+  btn.setAttribute('aria-expanded', 'false');
+}
+
 async function handleAuthLogin(e) {
   e.preventDefault();
   const email = document.getElementById('login-email').value.trim().toLowerCase();
@@ -150,7 +179,7 @@ async function handleAuthLogin(e) {
 
     currentUser = data;
     currentView = 'categories';
-    localStorage.setItem('ga_current_user', JSON.stringify(currentUser));
+    saveData();
     showToast('success', `Bienvenue, ${data.username} !`);
     renderApp();
   } catch (err) {
@@ -172,11 +201,18 @@ function generateVerificationCode() {
 function handleAuthRegister(e) {
   e.preventDefault();
   const u = document.getElementById('reg-username').value.trim();
-  const email = document.getElementById('reg-email').value.trim().toLowerCase();
+  const email = document.getElementById('reg-email').value.trim();
   const p = document.getElementById('reg-password').value.trim();
 
-  // L'unicité de l'email (et du nom d'utilisateur) est désormais vérifiée côté backend
-  // au moment de la création réelle du compte, une fois le code de vérification confirmé.
+  if (users.find(acc => acc.user === u)) {
+    showToast('error', "Ce nom d'utilisateur est déjà pris.");
+    return;
+  }
+  if (users.find(acc => acc.email && acc.email.toLowerCase() === email.toLowerCase())) {
+    showToast('error', "Un compte existe déjà avec cet email.");
+    return;
+  }
+
   pendingRegistration = {
     username: u,
     email: email,
@@ -253,7 +289,7 @@ function resendVerificationCode() {
   sendVerificationEmail(pendingRegistration);
 }
 
-async function handleVerifyCode(e) {
+function handleVerifyCode(e) {
   e.preventDefault();
   if (!pendingRegistration) return;
   const entered = document.getElementById('verify-code').value.trim();
@@ -263,33 +299,19 @@ async function handleVerifyCode(e) {
     return;
   }
 
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: pendingRegistration.username,
-        email: pendingRegistration.email,
-        password: pendingRegistration.pass
-      })
-    });
-    const data = await response.json();
-
-    if (!response.ok) {
-      showToast('error', data.error || "Impossible de créer le compte.");
-      backToRegisterStep();
-      return;
-    }
-
-    currentUser = data;
-    currentView = 'categories';
-    localStorage.setItem('ga_current_user', JSON.stringify(currentUser));
-    pendingRegistration = null;
-    showToast('success', `Compte créé ! Votre ID Membre est ${data.memberId}`);
-    renderApp();
-  } catch (err) {
-    showToast('error', "Erreur de connexion au serveur.");
-  }
+  const newUser = {
+    user: pendingRegistration.username,
+    email: pendingRegistration.email,
+    pass: pendingRegistration.pass,
+    memberId: pendingRegistration.memberId,
+    role: 'user'
+  };
+  users.push(newUser);
+  currentUser = newUser;
+  currentView = 'categories';
+  pendingRegistration = null;
+  saveData();
+  showToast('success', `Compte créé ! Votre ID Membre est ${newUser.memberId}`);
 }
 
 function handleLogout() {

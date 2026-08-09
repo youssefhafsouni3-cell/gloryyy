@@ -145,13 +145,13 @@
 
     <!-- NAVBAR -->
     <header class="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-40 transition-all">
-      <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+      <div class="max-w-7xl mx-auto px-3 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-2">
         
-        <div class="flex items-center gap-3 cursor-pointer group" onclick="openCategoriesView()">
-          <img src="logo.jpg" alt="Glory Aures" class="w-10 h-10 rounded-full object-cover shadow-md shadow-emerald-600/20 group-hover:scale-105 transition-transform duration-200">
+        <div class="flex items-center gap-2 sm:gap-3 cursor-pointer group shrink-0" onclick="openCategoriesView()">
+          <img src="logo.jpg" alt="Glory Aures" class="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover shadow-md shadow-emerald-600/20 group-hover:scale-105 transition-transform duration-200">
           <div>
-            <h1 class="font-black text-slate-900 text-base leading-none tracking-tight group-hover:text-emerald-600 transition-colors">Glory Aures</h1>
-            <span class="text-[10px] text-slate-400 font-bold tracking-widest uppercase">International</span>
+            <h1 class="font-black text-slate-900 text-sm sm:text-base leading-none tracking-tight group-hover:text-emerald-600 transition-colors">Glory Aures</h1>
+            <span class="hidden xs:block text-[10px] text-slate-400 font-bold tracking-widest uppercase">International</span>
           </div>
         </div>
 
@@ -162,16 +162,16 @@
           <a href="#footer-section" id="nav-contact" class="hover:text-emerald-600 transition-colors">Contact</a>
         </nav>
 
-        <div class="flex items-center gap-4 text-slate-600 text-sm font-semibold relative">
+        <div class="flex items-center gap-1 sm:gap-3 md:gap-4 text-slate-600 text-sm font-semibold relative flex-nowrap">
           <!-- BOUTON PANIER UTILISATEUR -->
           <div class="relative">
-            <button onclick="toggleCartDropdown()" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-slate-100 hover:text-emerald-600 transition-all relative" title="Mes Commandes / Panier">
-              <i class="fa-solid fa-cart-shopping"></i>
+            <button onclick="toggleCartDropdown()" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center hover:bg-slate-100 hover:text-emerald-600 transition-all relative shrink-0" title="Mes Commandes / Panier">
+              <i class="fa-solid fa-cart-shopping text-sm sm:text-base"></i>
               <span id="user-cart-badge" class="absolute -top-1 -right-1 bg-emerald-600 text-white text-[10px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center hidden shadow-sm">0</span>
             </button>
 
             <!-- DROPDOWN PANIER -->
-            <div id="cart-dropdown" class="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 p-4 hidden z-50 animate-fade-in">
+            <div id="cart-dropdown" class="absolute right-0 mt-3 w-[calc(100vw-1.5rem)] max-w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 p-4 hidden z-50 animate-fade-in">
               <div class="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-3">
                 <h4 class="font-extrabold text-xs text-slate-900 uppercase tracking-wider flex items-center gap-2">
                   <i class="fa-solid fa-basket-shopping text-emerald-600"></i> Mes Commandes
@@ -183,7 +183,7 @@
           </div>
 
           <!-- SELECTEUR DE LANGUE -->
-          <div class="flex items-center gap-1.5 text-xs font-bold cursor-pointer px-2.5 py-1.5 rounded-full hover:bg-slate-100 hover:text-emerald-600 transition-all">
+          <div class="hidden xs:flex items-center gap-1.5 text-xs font-bold cursor-pointer px-1.5 sm:px-2.5 py-1.5 rounded-full hover:bg-slate-100 hover:text-emerald-600 transition-all shrink-0">
             <i class="fa-solid fa-globe text-slate-400"></i>
             <select id="lang-select" onchange="changeLanguage(this.value)" class="bg-transparent border-none outline-none font-bold text-xs cursor-pointer text-slate-700">
               <option value="fr">FR</option>
@@ -193,13 +193,13 @@
           </div>
 
           <!-- ADMIN NOTIFICATIONS BELL -->
-          <div id="admin-notif-wrapper" class="relative hidden">
-            <button onclick="toggleNotifDropdown()" class="relative w-9 h-9 rounded-full flex items-center justify-center hover:bg-slate-100 hover:text-emerald-600 transition-all">
-              <i class="fa-solid fa-bell text-lg"></i>
+          <div id="admin-notif-wrapper" class="relative hidden shrink-0">
+            <button onclick="toggleNotifDropdown()" class="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center hover:bg-slate-100 hover:text-emerald-600 transition-all">
+              <i class="fa-solid fa-bell text-base sm:text-lg"></i>
               <span id="notif-badge" class="absolute top-1 right-1 bg-rose-500 text-white text-[10px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center hidden shadow-sm animate-pulse">0</span>
             </button>
 
-            <div id="notif-dropdown" class="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 p-4 hidden z-50 animate-fade-in">
+            <div id="notif-dropdown" class="absolute right-0 mt-3 w-[calc(100vw-1.5rem)] max-w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 p-4 hidden z-50 animate-fade-in">
               <div class="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-3">
                 <h4 class="font-extrabold text-xs text-slate-900 uppercase tracking-wider">Demandes Reçues</h4>
                 <button onclick="clearAllNotifications()" class="text-[10px] text-slate-400 hover:text-rose-500 font-bold transition-colors">Tout effacer</button>
@@ -208,21 +208,33 @@
             </div>
           </div>
 
-          <div id="user-id-badge" class="hidden sm:flex items-center gap-1.5 text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2.5 py-1.5 rounded-full" title="Votre ID Membre">
+          <div id="user-id-badge" class="hidden sm:flex items-center gap-1.5 text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2.5 py-1.5 rounded-full shrink-0" title="Votre ID Membre">
             <i class="fa-solid fa-id-badge text-emerald-500"></i><span id="user-id-badge-text"></span>
           </div>
 
-          <button id="nav-admin-btn" onclick="openAdminView()" class="hidden px-3.5 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-xl text-xs font-bold hover:bg-emerald-600 hover:text-white transition-all duration-200 flex items-center gap-2 shadow-sm">
+          <button id="nav-admin-btn" onclick="openAdminView()" class="hidden px-2 sm:px-3.5 py-1.5 sm:py-2 bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-xl text-xs font-bold hover:bg-emerald-600 hover:text-white transition-all duration-200 flex items-center gap-2 shadow-sm shrink-0">
             <i class="fa-solid fa-user-shield"></i>
-            <span id="lbl-admin-btn">Admin</span>
+            <span id="lbl-admin-btn" class="hidden sm:inline">Admin</span>
           </button>
 
-          <button onclick="handleLogout()" class="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all ml-1" title="Déconnexion">
-            <i class="fa-solid fa-right-from-bracket"></i>
+          <button onclick="handleLogout()" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all shrink-0" title="Déconnexion">
+            <i class="fa-solid fa-right-from-bracket text-sm sm:text-base"></i>
+          </button>
+
+          <!-- BURGER TOGGLE (mobile uniquement) -->
+          <button id="mobile-menu-btn" onclick="toggleMobileMenu()" class="md:hidden w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-100 hover:text-emerald-600 transition-all shrink-0 ml-0.5" aria-label="Menu" aria-expanded="false">
+            <i class="fa-solid fa-bars text-base" id="mobile-menu-icon"></i>
           </button>
         </div>
 
       </div>
+
+      <!-- MENU MOBILE DEROULANT -->
+      <nav id="mobile-menu" class="md:hidden hidden flex-col border-t border-slate-100 bg-white/95 backdrop-blur-md animate-fade-in">
+        <a href="#" onclick="openCategoriesView(); closeMobileMenu();" class="px-6 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-emerald-600 border-b border-slate-50">Accueil</a>
+        <a href="#categories-section" onclick="openCategoriesView(); closeMobileMenu();" class="px-6 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-emerald-600 border-b border-slate-50">Catégories</a>
+        <a href="#footer-section" onclick="closeMobileMenu();" class="px-6 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-emerald-600">Contact</a>
+      </nav>
     </header>
 
     <!-- MAIN BODY CONTENT -->

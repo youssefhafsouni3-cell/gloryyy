@@ -16,36 +16,23 @@ model User {
   memberId String?
 }
 
+// Stocke les inscriptions en attente de confirmation par code email.
+// Persiste en base (et non plus en memoire) pour survivre aux redemarrages
+// du serveur (ex: cold start Render) entre l'etape "register" et "verify".
+model PendingRegistration {
+  id        String   @id @default(uuid())
+  username  String
+  email     String   @unique
+  password  String   // deja hashe (bcrypt) au moment de l'enregistrement
+  code      String
+  createdAt DateTime @default(now())
+}
+
 model Category {
   id    String @id @default(uuid())
   name  String
   image String
   posts Post[]
-}
-
-model Post {
-  id          String   @id @default(uuid())
-  title       String
-  description String?
-  price       Float?
-  image       String?
-  categoryId  String
-  category    Category @relation(fields: [categoryId], references: [id])
-  createdAt   DateTime @default(now())
-}
-
-model Order {
-  id            String   @id @default(uuid())
-  username      String?
-  productTitle  String?
-  productImage  String?
-  categoryName  String?
-  fullname      String?
-  email         String?
-  phone         String?
-  quantity      Int      @default(1)
-  status        String   @default("pending")
-  createdAt     DateTime @default(now())
 }
 
 model Catalogue {
@@ -55,4 +42,32 @@ model Catalogue {
   dateTo    String?
   image     String
   createdAt DateTime @default(now())
+  posts     Post[]
+}
+
+model Post {
+  id          String     @id @default(uuid())
+  title       String
+  description String?
+  price       Float?
+  image       String?
+  categoryId  String?
+  category    Category?  @relation(fields: [categoryId], references: [id])
+  catalogueId String?
+  catalogue   Catalogue? @relation(fields: [catalogueId], references: [id])
+  createdAt   DateTime   @default(now())
+}
+
+model Order {
+  id           String   @id @default(uuid())
+  username     String?
+  productTitle String?
+  productImage String?
+  categoryName String?
+  fullname     String?
+  email        String?
+  phone        String?
+  quantity     Int      @default(1)
+  status       String   @default("pending")
+  createdAt    DateTime @default(now())
 }

@@ -23,6 +23,8 @@ let activeCategoryViewId = null;
 let activeProductId = null;
 let activeProductSource = 'category'; // 'category' | 'catalogue'
 let pendingRegistration = null; // { username, email, pass, code, memberId }
+let verifyCountdownInterval = null;
+const VERIFY_COUNTDOWN_SECONDS = 60; // -1m countdown before the code can be resent
 
 // ==================== TRANSLATIONS ====================
 const translations = {
@@ -68,23 +70,48 @@ async function saveData() {
 }
 
 async function loadData() {
+    // Les "produits" sont les Post Prisma, déjà inclus dans chaque catégorie / catalogue
+    // (include: { posts: true } côté backend) -> pas de route /api/products séparée.
     try {
-        // Les "produits" sont les Post Prisma, déjà inclus dans chaque catégorie
-        // (include: { posts: true } côté backend) -> pas de route /api/products séparée.
         const resCat = await fetch(`${API_BASE_URL}/api/categories`);
         if (!resCat.ok) {
             throw new Error(`GET /api/categories a échoué avec le statut ${resCat.status}`);
         }
         categories = await resCat.json();
     } catch (err) {
-        console.error("Erreur lors du chargement des données :", err);
+        console.error("Erreur lors du chargement des catégories :", err);
+    }
+
+    // Auparavant les catalogues n'étaient jamais rechargés depuis le serveur : la page
+    // catalogues restait vide (ou obsolète) après un rafraîchissement de la page.
+    try {
+        const resCatalogues = await fetch(`${API_BASE_URL}/api/catalogues`);
+        if (!resCatalogues.ok) {
+            throw new Error(`GET /api/catalogues a échoué avec le statut ${resCatalogues.status}`);
+        }
+        catalogues = await resCatalogues.json();
+    } catch (err) {
+        console.error("Erreur lors du chargement des catalogues :", err);
+    }
+
+    // Idem pour les commandes/demandes : nécessaires pour le panneau admin et le panier client.
+    try {
+        const resOrders = await fetch(`${API_BASE_URL}/api/orders`);
+        if (!resOrders.ok) {
+            throw new Error(`GET /api/orders a échoué avec le statut ${resOrders.status}`);
+        }
+        orders = await resOrders.json();
+    } catch (err) {
+        console.error("Erreur lors du chargement des commandes :", err);
     }
 }
 
 function changeLanguage(lang) {
+  if (!translations[lang]) return;
   currentLang = lang;
+  localStorage.setItem('ga_lang', lang);
   document.documentElement.dir = translations[lang].dir;
-  saveData();
+  renderApp();
 }
 
 function fileToBase64(file) {
@@ -205,6 +232,16 @@ async function handleAuthRegister(e) {
   const email = document.getElementById('reg-email').value.trim().toLowerCase();
   const password = document.getElementById('reg-password').value.trim();
 
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailPattern.test(email)) {
+    showToast('error', "Veuillez saisir une adresse email valide.");
+    return;
+  }
+  if (password.length < 4) {
+    showToast('error', "Le mot de passe doit contenir au moins 4 caractères.");
+    return;
+  }
+
   const btnSubmit = document.getElementById('btn-reg-submit');
   if (btnSubmit) {
     btnSubmit.disabled = true;
@@ -247,16 +284,64 @@ function showVerificationStep() {
   document.getElementById('auth-step-verify').classList.remove('hidden');
   document.getElementById('verify-target-email').innerText = pendingRegistration.email;
   document.getElementById('verify-code').value = '';
+  startVerifyCountdown();
 }
 
 function backToRegisterStep() {
   pendingRegistration = null;
+  stopVerifyCountdown();
   document.getElementById('auth-step-verify').classList.add('hidden');
   document.getElementById('auth-step-credentials').classList.remove('hidden');
 }
 
+// ==================== EMAIL VERIFICATION COUNTDOWN (1 MINUTE) ====================
+
+function startVerifyCountdown() {
+  stopVerifyCountdown();
+
+  const resendBtn = document.getElementById('btn-resend-code');
+  const countdownEl = document.getElementById('verify-countdown');
+  let remaining = VERIFY_COUNTDOWN_SECONDS;
+
+  const render = () => {
+    if (!countdownEl) return;
+    const minutes = Math.floor(remaining / 60);
+    const seconds = remaining % 60;
+    countdownEl.innerText = `-${minutes}:${String(seconds).padStart(2, '0')}`;
+  };
+
+  if (resendBtn) {
+    resendBtn.disabled = true;
+    resendBtn.classList.add('opacity-40', 'cursor-not-allowed');
+  }
+  render();
+
+  verifyCountdownInterval = setInterval(() => {
+    remaining -= 1;
+    render();
+    if (remaining <= 0) {
+      stopVerifyCountdown();
+      if (resendBtn) {
+        resendBtn.disabled = false;
+        resendBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+      }
+      if (countdownEl) countdownEl.innerText = '';
+    }
+  }, 1000);
+}
+
+function stopVerifyCountdown() {
+  if (verifyCountdownInterval) {
+    clearInterval(verifyCountdownInterval);
+    verifyCountdownInterval = null;
+  }
+}
+
 async function resendVerificationCode() {
   if (!pendingRegistration) return;
+  const resendBtn = document.getElementById('btn-resend-code');
+  if (resendBtn && resendBtn.disabled) return; // countdown not finished yet
+
   try {
     const res = await fetch(`${API_BASE_URL}/api/register-pending`, {
       method: 'POST',
@@ -270,6 +355,7 @@ async function resendVerificationCode() {
     const data = await res.json();
     if (res.ok) {
       showToast('success', "Nouveau code envoyé par email.");
+      startVerifyCountdown();
     } else {
       showToast('error', data.error || "Impossible de renvoyer le code.");
     }
@@ -296,24 +382,42 @@ async function handleVerifyCode(e) {
       return;
     }
 
-    currentUser = data;
+    stopVerifyCountdown();
+    currentUser = data.user || data;
     currentView = 'categories';
     pendingRegistration = null;
     localStorage.setItem('user', JSON.stringify(currentUser));
-    showToast('success', `Compte créé ! Votre ID Membre est ${data.memberId}`);
+    showToast('success', 'Account created successfully');
     renderApp();
   } catch (err) {
     showToast('error', "Impossible de contacter le serveur.");
   }
 }
 
+// Ouvre la fenêtre de confirmation ; la session n'est détruite que si l'utilisateur confirme.
 function handleLogout() {
+  const modal = document.getElementById('modal-logout-confirm');
+  if (modal) {
+    modal.classList.remove('hidden');
+  } else {
+    // Filet de sécurité si le modal n'est pas présent dans le DOM.
+    performLogout();
+  }
+}
+
+function closeLogoutConfirm() {
+  const modal = document.getElementById('modal-logout-confirm');
+  if (modal) modal.classList.add('hidden');
+}
+
+function performLogout() {
   currentUser = null;
   activeCategoryViewId = null;
   activeProductId = null;
   pendingRegistration = null;
   currentView = 'categories';
   localStorage.removeItem('user');
+  closeLogoutConfirm();
   renderApp();
 }
 
@@ -566,16 +670,31 @@ async function createCatalogue(e) {
   }
 }
 
-function deleteCatalogue(catalogueId, event) {
+async function deleteCatalogue(catalogueId, event) {
   if (event) event.stopPropagation();
-  if (confirm("Voulez-vous vraiment supprimer ce catalogue et tous ses produits ?")) {
+  if (!confirm("Voulez-vous vraiment supprimer ce catalogue et tous ses produits ?")) return;
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/catalogues/${catalogueId}`, {
+      method: 'DELETE'
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      showToast('error', errData.error || "Échec de la suppression du catalogue.");
+      return;
+    }
+
     catalogues = catalogues.filter(c => c.id !== catalogueId);
     if (activeCategoryViewId === catalogueId && activeProductSource === 'catalogue') {
       activeCategoryViewId = null;
       currentView = 'categories';
     }
     showToast('success', 'Catalogue supprimé.');
-    saveData();
+    renderApp();
+  } catch (err) {
+    console.error("Erreur réseau :", err);
+    showToast('error', "Erreur de connexion au serveur.");
   }
 }
 
@@ -610,16 +729,37 @@ async function handleCatalogueEditSubmit(e) {
   const cat = catalogues.find(c => c.id === catalogueId);
   if (!cat) return;
 
-  cat.name = name;
-  cat.dateFrom = dateFrom;
-  cat.dateTo = dateTo;
-  if (fileInput.files.length > 0) {
-    cat.image = await fileToBase64(fileInput.files[0]);
-  }
+  try {
+    const payload = { name, dateFrom, dateTo };
+    if (fileInput.files.length > 0) {
+      payload.image = await fileToBase64(fileInput.files[0]);
+    }
 
-  closeEditCatalogueModal();
-  showToast('success', 'Catalogue mis à jour.');
-  saveData();
+    const response = await fetch(`${API_BASE_URL}/api/catalogues/${catalogueId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      showToast('error', errData.error || "Échec de la mise à jour du catalogue.");
+      return;
+    }
+
+    const data = await response.json();
+    cat.name = data.catalogue.name;
+    cat.dateFrom = data.catalogue.dateFrom;
+    cat.dateTo = data.catalogue.dateTo;
+    cat.image = data.catalogue.image;
+
+    closeEditCatalogueModal();
+    showToast('success', 'Catalogue mis à jour.');
+    renderApp();
+  } catch (err) {
+    console.error("Erreur réseau :", err);
+    showToast('error', "Erreur de connexion au serveur.");
+  }
 }
 
 function formatCatalogueDateRange(dateFrom, dateTo) {
@@ -663,7 +803,7 @@ async function createPost(e) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             title,
-            content,
+            description: content,
             image: imageBase64,
             categoryId: type === 'category' ? targetId : null,
             catalogueId: type === 'catalogue' ? targetId : null
@@ -734,7 +874,7 @@ async function handleQuickAddProductSubmit(e) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title,
-          content,
+          description: content,
           image: imageBase64,
           categoryId: type === 'category' ? containerId : null,
           catalogueId: type === 'catalogue' ? containerId : null
@@ -795,7 +935,7 @@ function openEditProductModal(type, containerId, postId, event) {
   document.getElementById('edit-product-cat-id').value = containerId;
   document.getElementById('edit-product-id').value = postId;
   document.getElementById('edit-product-title').value = prod.title;
-  document.getElementById('edit-product-content').value = prod.content;
+  document.getElementById('edit-product-content').value = prod.description || '';
   document.getElementById('edit-product-image-file').value = '';
 
   const categoryField = document.getElementById('edit-product-category-field');
@@ -839,26 +979,41 @@ async function handleProductEditSubmit(e) {
   const prodIndex = oldContainer.posts.findIndex(p => p.id === prodId);
   if (prodIndex === -1) return;
 
-  let product = oldContainer.posts[prodIndex];
-  product.title = title;
-  product.content = content;
-
-  if (fileInput.files.length > 0) {
-    product.image = await fileToBase64(fileInput.files[0]);
-  }
-
-  if (type === 'category') {
-    const newContainerId = document.getElementById('edit-product-category-select').value;
-    if (newContainerId && newContainerId !== oldContainerId) {
-      oldContainer.posts.splice(prodIndex, 1);
-      const newContainer = findContainer('category', newContainerId);
-      if (newContainer) newContainer.posts.unshift(product);
+  try {
+    const payload = { title, description: content };
+    if (fileInput.files.length > 0) {
+      payload.image = await fileToBase64(fileInput.files[0]);
     }
-  }
 
-  closeEditProductModal();
-  showToast('success', 'Produit mis à jour.');
-  saveData();
+    const response = await fetch(`${API_BASE_URL}/api/posts/${prodId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      showToast('error', errData.error || "Échec de la mise à jour du produit.");
+      return;
+    }
+
+    const updatedPost = await response.json();
+    let product = oldContainer.posts[prodIndex];
+    product.title = updatedPost.title;
+    product.description = updatedPost.description;
+    product.image = updatedPost.image;
+
+    // Note : le déplacement d'un produit vers une autre catégorie n'est pas encore
+    // supporté côté serveur (nécessiterait une route dédiée) ; on garde donc le produit
+    // dans sa catégorie/catalogue d'origine pour rester cohérent avec la base de données.
+
+    closeEditProductModal();
+    showToast('success', 'Produit mis à jour.');
+    renderApp();
+  } catch (err) {
+    console.error("Erreur mise à jour produit :", err);
+    showToast('error', "Impossible de contacter le serveur.");
+  }
 }
 
 // ==================== CART & NOTIFICATIONS ====================
@@ -935,11 +1090,25 @@ async function submitOrder(e) {
   }
 }
 
-function updateOrderStatus(orderId, status) {
+async function updateOrderStatus(orderId, status) {
   const order = orders.find(o => o.id === orderId);
-  if (order) {
+  if (!order) return;
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      showToast('error', errData.error || "Échec de la mise à jour du statut.");
+      return;
+    }
+
     order.status = status;
-    saveData();
+    renderApp();
 
     const templateParams = {
       name: order.fullname || 'Client',
@@ -957,19 +1126,41 @@ function updateOrderStatus(orderId, status) {
           console.error('Erreur envoi email:', err);
         });
     }
+  } catch (err) {
+    console.error("Erreur réseau :", err);
+    showToast('error', "Erreur de connexion au serveur.");
   }
 }
 
-function deleteNotification(orderId, e) {
+async function deleteNotification(orderId, e) {
   if (e) e.stopPropagation();
-  orders = orders.filter(o => o.id !== orderId);
-  saveData();
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}`, { method: 'DELETE' });
+    if (!response.ok) {
+      showToast('error', "Échec de la suppression de la demande.");
+      return;
+    }
+    orders = orders.filter(o => o.id !== orderId);
+    renderApp();
+  } catch (err) {
+    console.error("Erreur réseau :", err);
+    showToast('error', "Erreur de connexion au serveur.");
+  }
 }
 
-function clearAllNotifications() {
-  if (confirm("Voulez-vous supprimer toutes les demandes ?")) {
+async function clearAllNotifications() {
+  if (!confirm("Voulez-vous supprimer toutes les demandes ?")) return;
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/orders`, { method: 'DELETE' });
+    if (!response.ok) {
+      showToast('error', "Échec de la suppression des demandes.");
+      return;
+    }
     orders = [];
-    saveData();
+    renderApp();
+  } catch (err) {
+    console.error("Erreur réseau :", err);
+    showToast('error', "Erreur de connexion au serveur.");
   }
 }
 
@@ -1172,7 +1363,7 @@ function renderApp() {
                 <span class="text-[9px] font-extrabold px-2 py-0.5 rounded-full ${badgeClass}">${badgeText}</span>
               </div>
               <p class="text-slate-500 text-[10px]">Quantité: ${ord.quantity} | Catégorie: ${ord.categoryName}</p>
-              <p class="text-[9px] text-slate-400">${ord.date}</p>
+              <p class="text-[9px] text-slate-400">${ord.createdAt ? new Date(ord.createdAt).toLocaleDateString() : ''}</p>
             </div>
           </div>
         </div>
@@ -1297,7 +1488,7 @@ function renderApp() {
                   <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold ${badgeClass}">${badgeText}</span>
                 </div>
                 <p class="text-slate-600">Client: <b>${ord.fullname}</b> (${ord.email}) | Tel: ${ord.phone}</p>
-                <p class="text-slate-400 text-[10px]">Catégorie: ${ord.categoryName} | Quantité: ${ord.quantity} | ${ord.date}</p>
+                <p class="text-slate-400 text-[10px]">Catégorie: ${ord.categoryName} | Quantité: ${ord.quantity} | ${ord.createdAt ? new Date(ord.createdAt).toLocaleDateString() : ''}</p>
               </div>
             </div>
 
@@ -1329,7 +1520,7 @@ function renderApp() {
             <img src="${p.image}" alt="${p.title.replace(/"/g, '&quot;')}" loading="lazy" class="w-full h-48 object-cover">
             <div class="p-4 space-y-1">
               <h5 class="font-bold text-sm text-slate-900">${p.title}</h5>
-              <p class="text-xs text-slate-500 line-clamp-2">${p.content}</p>
+              <p class="text-xs text-slate-500 line-clamp-2">${p.description || ''}</p>
             </div>
 
             ${isAdminRole ? `
@@ -1384,7 +1575,7 @@ function renderApp() {
             <img src="${p.image}" alt="${p.title.replace(/"/g, '&quot;')}" loading="lazy" class="w-full h-48 object-cover">
             <div class="p-4 space-y-1">
               <h5 class="font-bold text-sm text-slate-900">${p.title}</h5>
-              <p class="text-xs text-slate-500 line-clamp-2">${p.content}</p>
+              <p class="text-xs text-slate-500 line-clamp-2">${p.description || ''}</p>
             </div>
 
             ${isAdminRole ? `
@@ -1425,7 +1616,7 @@ function renderApp() {
     if (prod) {
       document.getElementById('detail-product-image').src = prod.image;
       document.getElementById('detail-product-title').innerText = prod.title;
-      document.getElementById('detail-product-desc').innerText = prod.content;
+      document.getElementById('detail-product-desc').innerText = prod.description || '';
     }
   } else {
     if (viewCategoriesGrid) viewCategoriesGrid.classList.remove('hidden');

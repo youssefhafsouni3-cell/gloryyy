@@ -132,7 +132,10 @@
             <button type="submit" class="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold rounded-xl text-sm transition-all duration-200 shadow-lg shadow-emerald-600/25 active:scale-[0.99]">Confirmer le compte</button>
             <div class="flex items-center justify-between text-[11px] font-bold pt-1">
               <button type="button" onclick="backToRegisterStep()" class="text-slate-400 hover:text-slate-700 transition-colors"><i class="fa-solid fa-arrow-left mr-1"></i>Retour</button>
-              <button type="button" onclick="resendVerificationCode()" class="text-emerald-600 hover:text-emerald-800 transition-colors">Renvoyer le code</button>
+              <div class="flex items-center gap-2">
+                <span id="verify-countdown" class="text-slate-400 font-mono tabular-nums"></span>
+                <button type="button" id="btn-resend-code" onclick="resendVerificationCode()" class="text-emerald-600 hover:text-emerald-800 transition-colors disabled:text-slate-300">Renvoyer le code</button>
+              </div>
             </div>
           </form>
         </div>
@@ -724,6 +727,21 @@
           <button type="submit" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-emerald-600/20">Enregistrer</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL LOGOUT CONFIRMATION -->
+  <div id="modal-logout-confirm" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md hidden animate-fade-in">
+    <div class="glass-card rounded-3xl p-6 sm:p-8 shadow-2xl border border-rose-100 w-full max-w-sm relative overflow-hidden text-center">
+      <div class="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center text-2xl mx-auto mb-4 shadow-inner">
+        <i class="fa-solid fa-right-from-bracket"></i>
+      </div>
+      <h3 class="font-black text-slate-900 text-base mb-2">Are you sure you want to log out?</h3>
+      <p class="text-xs text-slate-500 font-medium mb-6">Vous devrez vous reconnecter pour accéder à votre compte.</p>
+      <div class="flex items-center gap-3">
+        <button type="button" onclick="closeLogoutConfirm()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all">Cancel</button>
+        <button type="button" onclick="performLogout()" class="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-rose-600/20">Confirm</button>
+      </div>
     </div>
   </div>
 

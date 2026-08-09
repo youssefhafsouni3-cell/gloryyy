@@ -26,25 +26,31 @@ const transporter = nodemailer.createTransport({
 // ==================== AUTHENTICATION ====================
 
 // 1. Login via email + password
+// في prisma/server.js
 app.post('/api/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email et mot de passe requis.' });
-  }
-  const normalizedEmail = email.toLowerCase();
   try {
-    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: "Champs manquants." });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      return res.status(401).json({ error: "Aucun compte trouvé avec cet email." });
+      return res.status(400).json({ error: "Email ou mot de passe incorrect." });
     }
-    const passwordMatches = await bcrypt.compare(password, user.password);
-    if (!passwordMatches) {
-      return res.status(401).json({ error: "Mot de passe incorrect." });
+
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid) {
+      return res.status(400).json({ error: "Email ou mot de passe incorrect." });
     }
-    const { password: _pw, ...safeUser } = user;
-    res.json(safeUser);
+
+    const { password: _, ...userWithoutPassword } = user;
+    res.json({ message: "Connexion réussie", user: userWithoutPassword });
+
   } catch (error) {
-    res.status(500).json({ error: 'Erreur lors de la connexion', details: error.message });
+    console.error("LOGIN ERROR DETAILS:", error); // 👈 هذا السطر هو ما سيظهر في Logs منصة Render
+    res.status(500).json({ error: "Erreur serveur", details: error.message });
   }
 });
 

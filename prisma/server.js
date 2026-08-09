@@ -252,12 +252,23 @@ app.post('/api/categories', async (req, res) => {
   }
 });
 
+// ✅ الكود الصحيح: يحذف المنتجات التابعة للكاتيجوري أولاً ثم يحذف الكاتيجوري
 app.delete('/api/categories/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    await prisma.category.delete({ where: { id } });
-    res.json({ message: 'Catégorie supprimée avec succès' });
+    // 1. حذف جميع المنتجات المرتبطة بهذه الكاتيجوري
+    await prisma.post.deleteMany({
+      where: { categoryId: id }
+    });
+
+    // 2. حذف الكاتيجوري نفسها بعد إفرغها
+    await prisma.category.delete({
+      where: { id }
+    });
+
+    res.json({ message: 'Catégorie et ses produits supprimés avec succès' });
   } catch (error) {
+    console.error("Error deleting category:", error);
     res.status(500).json({ error: 'Error deleting category', details: error.message });
   }
 });

@@ -440,8 +440,15 @@ async function deleteCategory(catId, event) {
   if (event) event.stopPropagation();
   if (confirm("Voulez-vous vraiment supprimer cette catégorie et tous ses produits ?")) {
     try {
+      // 1. جلب الـ Token المخزن عند الـ Login
+      const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
+
       const response = await fetch(`${API_BASE_URL}/api/categories/${catId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` // 2. إرسال الهيدر للسيرفر
+        }
       });
 
       if (response.ok) {
@@ -453,7 +460,8 @@ async function deleteCategory(catId, event) {
         showToast('success', "Catégorie supprimée.");
         renderApp();
       } else {
-        showToast('error', "Échec de la suppression sur le serveur.");
+        const errorData = await response.json().catch(() => ({}));
+        showToast('error', errorData.error || "Échec de la suppression sur le serveur.");
       }
     } catch (err) {
       console.error("Erreur réseau :", err);
@@ -525,14 +533,53 @@ async function createCatalogue(e) {
   const fileInput = document.getElementById('catalogue-image-file');
 
   if (name && dateFrom && dateTo && fileInput.files.length > 0) {
-    const imageBase64 = await fileToBase64(fileInput.files[0]);
-    catalogues.unshift({ id: 'catalogue-' + Date.now(), name, dateFrom, dateTo, image: imageBase64, posts: [] });
-    document.getElementById('catalogue-name').value = '';
-    document.getElementById('catalogue-date-from').value = '';
-    document.getElementById('catalogue-date-to').value = '';
-    fileInput.value = '';
-    showToast('success', 'Catalogue créé !');
-    saveData();
+    try {
+      // 1. تحويل الصورة إلى Base64
+      const imageBase64 = await fileToBase64(fileInput.files[0]);
+
+      // 2. جلب الـ Token من الـ LocalStorage
+      const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
+
+      // 3. إرسال طلب POST إلى الـ Backend
+      const response = await fetch(`${API_BASE_URL}/api/catalogues`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name,
+          dateFrom,
+          dateTo,
+          image: imageBase64
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // تفريغ الحقول بعد النجاح
+        document.getElementById('catalogue-name').value = '';
+        document.getElementById('catalogue-date-from').value = '';
+        document.getElementById('catalogue-date-to').value = '';
+        fileInput.value = '';
+
+        showToast('success', 'Catalogue créé avec succès !');
+
+        // تحديث القائمة المحلية وإعادة رسم الواجهة
+        if (data.catalogue) {
+          catalogues.unshift(data.catalogue);
+        }
+        renderApp();
+      } else {
+        showToast('error', data.error || "Échec de la création du catalogue.");
+      }
+    } catch (err) {
+      console.error("Erreur réseau :", err);
+      showToast('error', "Erreur de connexion au serveur.");
+    }
+  } else {
+    showToast('error', "Veuillez remplir tous les champs.");
   }
 }
 
@@ -844,7 +891,7 @@ function toggleNotifDropdown() {
   if (dropdown) dropdown.classList.toggle('hidden');
 }
 
-function submitOrder(e) {
+async function submitOrder(e) {
   e.preventDefault();
   const fullname = document.getElementById('order-fullname').value.trim();
   const email = document.getElementById('order-email').value.trim();
@@ -855,25 +902,53 @@ function submitOrder(e) {
   const prod = cat ? cat.posts.find(p => p.id === activeProductId) : null;
 
   if (fullname && email && phone && quantity && prod && currentUser) {
-    const newOrder = {
-      id: 'ord-' + Date.now(),
-      username: currentUser.user,
-      productTitle: prod.title,
-      productImage: prod.image,
-      categoryName: cat.name,
-      fullname, email, phone, quantity,
-      status: 'pending',
-      date: new Date().toLocaleString('fr-FR')
-    };
+    try {
+      // 1. جلب التوكين المخزن للمستخدم
+      const token = localStorage.getItem('token');
 
-    orders.unshift(newOrder);
-    showToast('success', translations[currentLang].sentSuccess);
+      // 2. إرسال الطلب للسيرفر في Render
+      const response = await fetch(`${API_BASE_URL}/api/orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          username: currentUser.user || currentUser.username,
+          productTitle: prod.title,
+          productImage: prod.image,
+          categoryName: cat.name,
+          fullname,
+          email,
+          phone,
+          quantity: parseInt(quantity),
+          status: 'pending'
+        })
+      });
 
-    document.getElementById('order-fullname').value = '';
-    document.getElementById('order-email').value = '';
-    document.getElementById('order-phone').value = '';
+      const data = await response.json();
 
-    saveData();
+      if (response.ok) {
+        showToast('success', translations[currentLang].sentSuccess);
+
+        // تفريغ المدخلات بعد النجاح
+        document.getElementById('order-fullname').value = '';
+        document.getElementById('order-email').value = '';
+        document.getElementById('order-phone').value = '';
+
+        // أضف الطلب محلياً إذا أرجع السيرفر كائن الطلب
+        if (data.order) {
+          orders.unshift(data.order);
+        }
+      } else {
+        showToast('error', data.error || "Échec de l'envoi de la commande.");
+      }
+    } catch (err) {
+      console.error("Erreur réseau :", err);
+      showToast('error', "Erreur de connexion au serveur.");
+    }
+  } else {
+    showToast('error', "Veuillez remplir tous les champs correctement.");
   }
 }
 

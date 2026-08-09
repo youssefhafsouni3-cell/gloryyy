@@ -3,7 +3,7 @@
 // En production (site déployé sur Netlify) -> backend déployé sur Render.
 const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? 'http://localhost:5000'
-  : 'https://gloryyy.onrender.com';
+  : 'https://gloryyy-2.onrender.com';
 let users = JSON.parse(localStorage.getItem('ga_users')) || [
   { user: 'admin', pass: 'admin', role: 'admin' }
 ];

@@ -208,7 +208,7 @@ async function handleAuthRegister(e) {
   }
 
   try {
-    const res = await fetch('https://gloryyy.onrender.com/api/register', {
+    const res = await fetch(`${API_BASE_URL}/api/register-pending`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

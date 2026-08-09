@@ -63,15 +63,11 @@ const translations = {
   }
 };
 
-// EL-CODE EL-9DIM (Satr 70 - 78)
-// EL-CODE EL-JDID
 async function saveData() {
     // Les données sont désormais sauvegardées directement dans la base de données via l'API
 }
 
 async function loadData() {
-    // Les "produits" sont les Post Prisma, déjà inclus dans chaque catégorie / catalogue
-    // (include: { posts: true } côté backend) -> pas de route /api/products séparée.
     try {
         const resCat = await fetch(`${API_BASE_URL}/api/categories`);
         if (!resCat.ok) {
@@ -82,8 +78,6 @@ async function loadData() {
         console.error("Erreur lors du chargement des catégories :", err);
     }
 
-    // Auparavant les catalogues n'étaient jamais rechargés depuis le serveur : la page
-    // catalogues restait vide (ou obsolète) après un rafraîchissement de la page.
     try {
         const resCatalogues = await fetch(`${API_BASE_URL}/api/catalogues`);
         if (!resCatalogues.ok) {
@@ -94,7 +88,6 @@ async function loadData() {
         console.error("Erreur lors du chargement des catalogues :", err);
     }
 
-    // Idem pour les commandes/demandes : nécessaires pour le panneau admin et le panier client.
     try {
         const resOrders = await fetch(`${API_BASE_URL}/api/orders`);
         if (!resOrders.ok) {
@@ -202,13 +195,13 @@ async function handleAuthLogin(e) {
     const data = await res.json();
 
     if (res.ok) {
-      // 👈 1. حفظ بيانات المستخدم في localStorage
       localStorage.setItem('user', JSON.stringify(data.user));
+      // Sauvegarder également le token d'authentification s'il est renvoyé par l'API
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+      }
 
-      // 👈 2. إظهار رسالة النجاح وتحديث الواجهة
       showToast('success', `Bienvenue ${data.user.username || ''} !`);
-      
-      // 👈 3. إعادة رسم الواجهة (تُخفي auth-screen تلقائيًا لأن currentUser أصبح معرّفًا)
       renderApp();
     } else {
       showToast('error', data.error || 'Erreur de connexion');
@@ -218,6 +211,7 @@ async function handleAuthLogin(e) {
     showToast('error', 'Impossible de se connecter au serveur');
   }
 }
+
 // ==================== REGISTRATION WITH EMAIL VERIFICATION ====================
 
 function generateMemberId() {
@@ -260,8 +254,6 @@ async function handleAuthRegister(e) {
     const data = await res.json();
 
     if (res.ok) {
-      // Le code réel a été généré et envoyé par le backend (nodemailer) — on ne connaît
-      // pas sa valeur ici, on attend juste que l'utilisateur le saisisse.
       pendingRegistration = { username, email, password };
       showToast('success', "Code de vérification envoyé par email.");
       showVerificationStep();
@@ -340,7 +332,7 @@ function stopVerifyCountdown() {
 async function resendVerificationCode() {
   if (!pendingRegistration) return;
   const resendBtn = document.getElementById('btn-resend-code');
-  if (resendBtn && resendBtn.disabled) return; // countdown not finished yet
+  if (resendBtn && resendBtn.disabled) return;
 
   try {
     const res = await fetch(`${API_BASE_URL}/api/register-pending`, {
@@ -387,6 +379,9 @@ async function handleVerifyCode(e) {
     currentView = 'categories';
     pendingRegistration = null;
     localStorage.setItem('user', JSON.stringify(currentUser));
+    if (data.token) {
+      localStorage.setItem('token', data.token);
+    }
     showToast('success', 'Account created successfully');
     renderApp();
   } catch (err) {
@@ -394,13 +389,11 @@ async function handleVerifyCode(e) {
   }
 }
 
-// Ouvre la fenêtre de confirmation ; la session n'est détruite que si l'utilisateur confirme.
 function handleLogout() {
   const modal = document.getElementById('modal-logout-confirm');
   if (modal) {
     modal.classList.remove('hidden');
   } else {
-    // Filet de sécurité si le modal n'est pas présent dans le DOM.
     performLogout();
   }
 }
@@ -417,6 +410,7 @@ function performLogout() {
   pendingRegistration = null;
   currentView = 'categories';
   localStorage.removeItem('user');
+  localStorage.removeItem('token');
   closeLogoutConfirm();
   renderApp();
 }
@@ -482,9 +476,8 @@ function initAuthVisualEffects() {
   }
 }
 
-// ==================== EDIT CATEGORY LOGIC ====================
+// ==================== CATEGORY LOGIC ====================
 
-// EL-CODE EL-JDID
 async function createCategory(e) {
     e.preventDefault();
     const nameInput = document.getElementById("category-name");
@@ -500,9 +493,13 @@ async function createCategory(e) {
     const image = await fileToBase64(imageInput.files[0]);
 
     try {
+        const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
         const response = await fetch(`${API_BASE_URL}/api/categories`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify({ name, image })
         });
 
@@ -527,14 +524,13 @@ async function deleteCategory(catId, event) {
   if (event) event.stopPropagation();
   if (confirm("Voulez-vous vraiment supprimer cette catégorie et tous ses produits ?")) {
     try {
-      // 1. جلب الـ Token المخزن عند الـ Login
       const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
 
       const response = await fetch(`${API_BASE_URL}/api/categories/${catId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` // 2. إرسال الهيدر للسيرفر
+          'Authorization': `Bearer ${token}`
         }
       });
 
@@ -590,9 +586,13 @@ async function handleCategoryEditSubmit(e) {
   }
 
   try {
+    const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
     const response = await fetch(`${API_BASE_URL}/api/categories/${catId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify({ name, image })
     });
 
@@ -610,6 +610,7 @@ async function handleCategoryEditSubmit(e) {
     showToast('error', "Erreur lors de la mise à jour.");
   }
 }
+
 // ==================== CATALOGUE LOGIC ====================
 
 async function createCatalogue(e) {
@@ -621,13 +622,9 @@ async function createCatalogue(e) {
 
   if (name && dateFrom && dateTo && fileInput.files.length > 0) {
     try {
-      // 1. تحويل الصورة إلى Base64
       const imageBase64 = await fileToBase64(fileInput.files[0]);
-
-      // 2. جلب الـ Token من الـ LocalStorage
       const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
 
-      // 3. إرسال طلب POST إلى الـ Backend
       const response = await fetch(`${API_BASE_URL}/api/catalogues`, {
         method: 'POST',
         headers: {
@@ -645,7 +642,6 @@ async function createCatalogue(e) {
       const data = await response.json();
 
       if (response.ok) {
-        // تفريغ الحقول بعد النجاح
         document.getElementById('catalogue-name').value = '';
         document.getElementById('catalogue-date-from').value = '';
         document.getElementById('catalogue-date-to').value = '';
@@ -653,7 +649,6 @@ async function createCatalogue(e) {
 
         showToast('success', 'Catalogue créé avec succès !');
 
-        // تحديث القائمة المحلية وإعادة رسم الواجهة
         if (data.catalogue) {
           catalogues.unshift(data.catalogue);
         }
@@ -675,8 +670,13 @@ async function deleteCatalogue(catalogueId, event) {
   if (!confirm("Voulez-vous vraiment supprimer ce catalogue et tous ses produits ?")) return;
 
   try {
+    const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
     const response = await fetch(`${API_BASE_URL}/api/catalogues/${catalogueId}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
     });
 
     if (!response.ok) {
@@ -735,9 +735,13 @@ async function handleCatalogueEditSubmit(e) {
       payload.image = await fileToBase64(fileInput.files[0]);
     }
 
+    const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
     const response = await fetch(`${API_BASE_URL}/api/catalogues/${catalogueId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify(payload)
     });
 
@@ -773,7 +777,7 @@ function formatCatalogueDateRange(dateFrom, dateTo) {
   }
 }
 
-// ==================== EDIT PRODUCT LOGIC ====================
+// ==================== PRODUCT LOGIC ====================
 
 function getContainerArray(type) {
   return type === 'catalogue' ? catalogues : categories;
@@ -798,9 +802,13 @@ async function createPost(e) {
       const imageBase64 = await fileToBase64(fileInput.files[0]);
 
       try {
+        const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
         const response = await fetch(`${API_BASE_URL}/api/posts`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
           body: JSON.stringify({
             title,
             description: content,
@@ -869,9 +877,13 @@ async function handleQuickAddProductSubmit(e) {
     const imageBase64 = await fileToBase64(fileInput.files[0]);
 
     try {
+      const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
       const response = await fetch(`${API_BASE_URL}/api/posts`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           title,
           description: content,
@@ -896,12 +908,18 @@ async function handleQuickAddProductSubmit(e) {
     }
   }
 }
+
 async function deletePost(type, containerId, postId, event) {
   if (event) event.stopPropagation();
   if (confirm("Voulez-vous supprimer ce produit ?")) {
     try {
+      const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
       const response = await fetch(`${API_BASE_URL}/api/posts/${postId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
       });
 
       if (response.ok) {
@@ -985,9 +1003,13 @@ async function handleProductEditSubmit(e) {
       payload.image = await fileToBase64(fileInput.files[0]);
     }
 
+    const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
     const response = await fetch(`${API_BASE_URL}/api/posts/${prodId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify(payload)
     });
 
@@ -1003,10 +1025,6 @@ async function handleProductEditSubmit(e) {
     product.description = updatedPost.description;
     product.image = updatedPost.image;
 
-    // Note : le déplacement d'un produit vers une autre catégorie n'est pas encore
-    // supporté côté serveur (nécessiterait une route dédiée) ; on garde donc le produit
-    // dans sa catégorie/catalogue d'origine pour rester cohérent avec la base de données.
-
     closeEditProductModal();
     showToast('success', 'Produit mis à jour.');
     renderApp();
@@ -1017,7 +1035,6 @@ async function handleProductEditSubmit(e) {
 }
 
 // ==================== CART & NOTIFICATIONS ====================
-// EL-CODE EL-9DIM (Satr 700 - 702)
 
 function toggleCartDropdown() {
   const dropdown = document.getElementById('cart-dropdown');
@@ -1041,10 +1058,8 @@ async function submitOrder(e) {
 
   if (fullname && email && phone && quantity && prod && currentUser) {
     try {
-      // 1. جلب التوكين المخزن للمستخدم
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
 
-      // 2. إرسال الطلب للسيرفر في Render
       const response = await fetch(`${API_BASE_URL}/api/orders`, {
         method: 'POST',
         headers: {
@@ -1069,12 +1084,10 @@ async function submitOrder(e) {
       if (response.ok) {
         showToast('success', translations[currentLang].sentSuccess);
 
-        // تفريغ المدخلات بعد النجاح
         document.getElementById('order-fullname').value = '';
         document.getElementById('order-email').value = '';
         document.getElementById('order-phone').value = '';
 
-        // أضف الطلب محلياً إذا أرجع السيرفر كائن الطلب
         if (data.order) {
           orders.unshift(data.order);
         }
@@ -1095,9 +1108,13 @@ async function updateOrderStatus(orderId, status) {
   if (!order) return;
 
   try {
+    const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
     const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify({ status })
     });
 
@@ -1135,7 +1152,14 @@ async function updateOrderStatus(orderId, status) {
 async function deleteNotification(orderId, e) {
   if (e) e.stopPropagation();
   try {
-    const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}`, { method: 'DELETE' });
+    const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
+    const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}`, { 
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
     if (!response.ok) {
       showToast('error', "Échec de la suppression de la demande.");
       return;
@@ -1151,7 +1175,14 @@ async function deleteNotification(orderId, e) {
 async function clearAllNotifications() {
   if (!confirm("Voulez-vous supprimer toutes les demandes ?")) return;
   try {
-    const response = await fetch(`${API_BASE_URL}/api/orders`, { method: 'DELETE' });
+    const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
+    const response = await fetch(`${API_BASE_URL}/api/orders`, { 
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
     if (!response.ok) {
       showToast('error', "Échec de la suppression des demandes.");
       return;
@@ -1430,11 +1461,10 @@ function renderApp() {
       });
     }
   } else {
-    // إخفاء الأزرار والإشعارات الخاصة بالمشرف تماماً للمستخدم العادي
     if (navAdminBtn) navAdminBtn.classList.add('hidden');
     if (adminNotifWrapper) adminNotifWrapper.classList.add('hidden');
     if (currentView === 'admin') {
-      currentView = 'home'; // منع البقاء في صفحة المشرف إذا حاول الدخول إليها
+      currentView = 'home';
     }
   }
 

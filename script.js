@@ -161,32 +161,39 @@ function closeMobileMenu() {
 
 async function handleAuthLogin(e) {
   e.preventDefault();
-  const email = document.getElementById('login-email').value.trim().toLowerCase();
-  const password = document.getElementById('login-password').value.trim();
+  
+  const emailInput = document.getElementById('login-email').value.trim();
+  const passwordInput = document.getElementById('login-password').value;
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/login`, {
+    const res = await fetch(`${API_BASE_URL}/api/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email: emailInput, password: passwordInput })
     });
-    const data = await response.json();
 
-    if (!response.ok) {
-      showToast('error', data.error || "Email ou mot de passe incorrect.");
-      return;
+    const data = await res.json();
+
+    if (res.ok) {
+      // 👈 1. حفظ بيانات المستخدم في localStorage
+      localStorage.setItem('user', JSON.stringify(data.user));
+
+      // 👈 2. إخفاء نافذة الـ Modal
+      closeAuthModal();
+
+      // 👈 3. إظهار رسالة النجاح وتحديث الواجهة
+      showToast('success', `Bienvenue ${data.user.name || ''} !`);
+      
+      // 👈 4. إعادة رسم الواجهة لعرض خصائص الأدمن
+      renderApp();
+    } else {
+      showToast('error', data.error || 'Erreur de connexion');
     }
-
-    currentUser = data;
-    currentView = 'categories';
-    saveData();
-    showToast('success', `Bienvenue, ${data.username} !`);
-    renderApp();
   } catch (err) {
-    showToast('error', "Erreur de connexion au serveur.");
+    console.error("Login Error:", err);
+    showToast('error', 'Impossible de se connecter au serveur');
   }
 }
-
 // ==================== REGISTRATION WITH EMAIL VERIFICATION ====================
 
 function generateMemberId() {
@@ -1124,10 +1131,15 @@ function renderApp() {
   const viewSingleCatalogue = document.getElementById('view-single-catalogue');
   const viewProductDetails = document.getElementById('view-product-details');
 
+  const storedUser = localStorage.getItem('user');
+  if (storedUser) {
+    currentUser = JSON.parse(storedUser);
+  }
+
   if (!currentUser) {
     if (authScreen) authScreen.classList.remove('hidden');
     if (mainApp) mainApp.classList.add('hidden');
-    initAuthVisualEffects();
+    if (typeof initAuthVisualEffects === 'function') initAuthVisualEffects();
     return;
   }
 
@@ -1146,10 +1158,12 @@ function renderApp() {
     }
   }
 
-  renderHeroShowcase();
+  if (typeof renderHeroShowcase === 'function') renderHeroShowcase();
 
   // --- CART RENDERING ---
-  const myOrders = orders.filter(o => o.username === currentUser.user);
+  const userIdentifier = currentUser.email || currentUser.user || currentUser.name;
+  const myOrders = orders.filter(o => o.username === userIdentifier || o.userEmail === currentUser.email || o.username === currentUser.user);
+  
   if (userCartBadge) {
     if (myOrders.length > 0) {
       userCartBadge.innerText = myOrders.length;
@@ -1191,7 +1205,9 @@ function renderApp() {
   }
 
   // --- ADMIN PANEL RENDERING ---
-  if (currentUser.role === 'admin') {
+  const isAdminRole = currentUser.role === 'admin' || currentUser.role === 'ADMIN';
+
+  if (isAdminRole) {
     if (navAdminBtn) navAdminBtn.classList.remove('hidden');
     if (adminNotifWrapper) adminNotifWrapper.classList.remove('hidden');
 
@@ -1275,7 +1291,7 @@ function renderApp() {
   if (viewSingleCatalogue) viewSingleCatalogue.classList.add('hidden');
   if (viewProductDetails) viewProductDetails.classList.add('hidden');
 
-  if (currentView === 'admin' && currentUser.role === 'admin') {
+  if (currentView === 'admin' && isAdminRole) {
     if (viewAdmin) viewAdmin.classList.remove('hidden');
     const adminOrdersContainer = document.getElementById('admin-orders-container');
     if (adminOrdersContainer) {
@@ -1326,7 +1342,6 @@ function renderApp() {
     if (cat) {
       document.getElementById('category-details-header').innerHTML = `<h4 class="font-bold text-sm text-slate-900">${cat.name}</h4>`;
       let postsHTML = '';
-      const isAdmin = currentUser && currentUser.role === 'admin';
 
       cat.posts.forEach(p => {
         postsHTML += `
@@ -1337,7 +1352,7 @@ function renderApp() {
               <p class="text-xs text-slate-500 line-clamp-2">${p.content}</p>
             </div>
 
-            ${isAdmin ? `
+            ${isAdminRole ? `
               <div class="absolute top-3 right-3 flex items-center gap-1.5 bg-white/90 backdrop-blur-sm p-1 rounded-xl shadow-md border border-slate-100 z-10">
                 <button onclick="openEditProductModal('category', '${cat.id}', '${p.id}', event)" class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition flex items-center justify-center text-xs" title="Modifier">
                   <i class="fa-solid fa-pen"></i>
@@ -1354,7 +1369,7 @@ function renderApp() {
       const container = document.getElementById('category-products-container');
       if (container) {
         container.innerHTML = `
-          ${isAdmin ? `
+          ${isAdminRole ? `
             <div class="flex justify-end mb-4">
               <button onclick="openQuickAddProduct('${cat.id}')" class="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-md hover:bg-emerald-700 transition flex items-center gap-2">
                 <i class="fa-solid fa-plus"></i> Ajouter un produit
@@ -1382,7 +1397,6 @@ function renderApp() {
       `;
 
       let postsHTML = '';
-      const isAdmin = currentUser && currentUser.role === 'admin';
 
       catalogue.posts.forEach(p => {
         postsHTML += `
@@ -1393,7 +1407,7 @@ function renderApp() {
               <p class="text-xs text-slate-500 line-clamp-2">${p.content}</p>
             </div>
 
-            ${isAdmin ? `
+            ${isAdminRole ? `
               <div class="absolute top-3 right-3 flex items-center gap-1.5 bg-white/90 backdrop-blur-sm p-1 rounded-xl shadow-md border border-slate-100 z-10">
                 <button onclick="openEditProductModal('catalogue', '${catalogue.id}', '${p.id}', event)" class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition flex items-center justify-center text-xs" title="Modifier">
                   <i class="fa-solid fa-pen"></i>
@@ -1410,7 +1424,7 @@ function renderApp() {
       const container = document.getElementById('catalogue-products-container');
       if (container) {
         container.innerHTML = `
-          ${isAdmin ? `
+          ${isAdminRole ? `
             <div class="flex justify-end mb-4">
               <button onclick="openQuickAddCatalogueProduct('${catalogue.id}')" class="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-md hover:bg-emerald-700 transition flex items-center gap-2">
                 <i class="fa-solid fa-plus"></i> Ajouter un produit au catalogue
@@ -1438,7 +1452,6 @@ function renderApp() {
 
     const cataloguesContainer = document.getElementById('catalogues-container');
     if (cataloguesContainer) {
-      const isAdmin = currentUser && currentUser.role === 'admin';
       cataloguesContainer.innerHTML = catalogues.length ? '' : `<p class="text-xs text-slate-400 text-center py-4">Aucun catalogue actif pour le moment.</p>`;
 
       catalogues.forEach(cat => {
@@ -1451,7 +1464,7 @@ function renderApp() {
               <p class="text-xs text-slate-300">${cat.posts.length} produit(s)</p>
             </div>
 
-            ${isAdmin ? `
+            ${isAdminRole ? `
               <div class="absolute top-4 right-4 flex items-center gap-2 z-20">
                 <button onclick="openEditCatalogueModal('${cat.id}', event)" class="w-8 h-8 rounded-xl bg-white/90 text-emerald-600 hover:bg-emerald-600 hover:text-white transition flex items-center justify-center text-xs shadow-md">
                   <i class="fa-solid fa-pen"></i>
@@ -1468,13 +1481,12 @@ function renderApp() {
 
     const postsContainer = document.getElementById('posts-container');
     if (postsContainer) {
-      const isAdmin = currentUser && currentUser.role === 'admin';
       postsContainer.innerHTML = categories.length ? '' : `<p class="col-span-full text-xs text-slate-400 text-center py-8">${t.noCategories}</p>`;
 
       categories.forEach(cat => {
         postsContainer.innerHTML += `
           <div onclick="openCategoryPage('${cat.id}')" class="group relative bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col justify-between">
-            ${isAdmin ? `
+            ${isAdminRole ? `
               <div class="absolute top-4 right-4 flex items-center gap-1.5 z-20">
                 <button onclick="openEditCategoryModal('${cat.id}', event)" class="w-8 h-8 rounded-xl bg-white/90 text-emerald-600 hover:bg-emerald-600 hover:text-white transition flex items-center justify-center text-xs shadow-md">
                   <i class="fa-solid fa-pen"></i>
@@ -1509,6 +1521,8 @@ function renderApp() {
 
 // EL-CODE EL-JDID
 document.addEventListener('DOMContentLoaded', async () => {
-  await loadData();
+  if (typeof loadData === 'function') {
+    await loadData();
+  }
   renderApp();
 });

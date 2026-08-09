@@ -194,35 +194,45 @@ function generateMemberId() {
   return 'GA-' + num;
 }
 
-function generateVerificationCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
-
-function handleAuthRegister(e) {
+async function handleAuthRegister(e) {
   e.preventDefault();
-  const u = document.getElementById('reg-username').value.trim();
+  
+  const username = document.getElementById('reg-username').value.trim();
   const email = document.getElementById('reg-email').value.trim();
-  const p = document.getElementById('reg-password').value.trim();
+  const password = document.getElementById('reg-password').value.trim();
 
-  if (users.find(acc => acc.user === u)) {
-    showToast('error', "Ce nom d'utilisateur est déjà pris.");
-    return;
-  }
-  if (users.find(acc => acc.email && acc.email.toLowerCase() === email.toLowerCase())) {
-    showToast('error', "Un compte existe déjà avec cet email.");
-    return;
+  const btnSubmit = document.getElementById('btn-reg-submit');
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.innerText = "Création en cours...";
   }
 
-  pendingRegistration = {
-    username: u,
-    email: email,
-    pass: p,
-    code: generateVerificationCode(),
-    memberId: generateMemberId()
-  };
+  try {
+    const res = await fetch('https://gloryyy.onrender.com/api/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ username, email, password })
+    });
 
-  sendVerificationEmail(pendingRegistration);
-  showVerificationStep();
+    const data = await res.json();
+
+    if (res.ok) {
+      showToast('success', "Compte créé avec succès ! Vous pouvez vous connecter.");
+      switchAuthTab('login'); // يرجعك لصفحة الـ Login
+    } else {
+      showToast('error', data.error || "Erreur lors de l'inscription.");
+    }
+  } catch (err) {
+    console.error("Erreur:", err);
+    showToast('error', "Impossible de contacter le serveur.");
+  } finally {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.innerText = "Créer un compte";
+    }
+  }
 }
 
 function sendVerificationEmail(reg) {

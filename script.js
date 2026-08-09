@@ -7,7 +7,7 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
 let users = JSON.parse(localStorage.getItem('ga_users')) || [
   { user: 'admin', pass: 'admin', role: 'admin' }
 ];
-let currentUser = JSON.parse(localStorage.getItem('ga_current_user')) || null;
+let currentUser = JSON.parse(localStorage.getItem('user')) || null;
 let categories = JSON.parse(localStorage.getItem('ga_categories')) || [
   { id: 'cat-1', name: 'Category 1', image: '', posts: [] },
   { id: 'cat-2', name: 'Category 2', image: '', posts: [] },
@@ -178,13 +178,10 @@ async function handleAuthLogin(e) {
       // 👈 1. حفظ بيانات المستخدم في localStorage
       localStorage.setItem('user', JSON.stringify(data.user));
 
-      // 👈 2. إخفاء نافذة الـ Modal
-      closeAuthModal();
-
-      // 👈 3. إظهار رسالة النجاح وتحديث الواجهة
-      showToast('success', `Bienvenue ${data.user.name || ''} !`);
+      // 👈 2. إظهار رسالة النجاح وتحديث الواجهة
+      showToast('success', `Bienvenue ${data.user.username || ''} !`);
       
-      // 👈 4. إعادة رسم الواجهة لعرض خصائص الأدمن
+      // 👈 3. إعادة رسم الواجهة (تُخفي auth-screen تلقائيًا لأن currentUser أصبح معرّفًا)
       renderApp();
     } else {
       showToast('error', data.error || 'Erreur de connexion');
@@ -302,7 +299,7 @@ async function handleVerifyCode(e) {
     currentUser = data;
     currentView = 'categories';
     pendingRegistration = null;
-    localStorage.setItem('ga_current_user', JSON.stringify(currentUser));
+    localStorage.setItem('user', JSON.stringify(currentUser));
     showToast('success', `Compte créé ! Votre ID Membre est ${data.memberId}`);
     renderApp();
   } catch (err) {
@@ -316,7 +313,7 @@ function handleLogout() {
   activeProductId = null;
   pendingRegistration = null;
   currentView = 'categories';
-  localStorage.removeItem('ga_current_user');
+  localStorage.removeItem('user');
   renderApp();
 }
 

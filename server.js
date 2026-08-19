@@ -56,9 +56,6 @@ app.post('/api/login', async (req, res) => {
 });
 
 // 2. Demande d'inscription : Envoi du code de verification par email
-//    Le brouillon d'inscription est desormais stocke en base (PendingRegistration)
-//    au lieu d'une Map en memoire, qui etait videe a chaque redemarrage/cold-start
-//    du serveur -> c'etait la cause principale des inscriptions qui "ne marchaient plus".
 app.post('/api/register-pending', async (req, res) => {
   const { username, email, password } = req.body;
 
@@ -87,18 +84,33 @@ app.post('/api/register-pending', async (req, res) => {
       return res.status(409).json({ error: "Ce nom d'utilisateur est deja pris." });
     }
 
+    // --- COOLDOWN CHECK (دقيقة انتظار بين كل كود والثاني) ---
+    const existingPending = await prisma.pendingRegistration.findUnique({ where: { email: normalizedEmail } });
+    if (existingPending) {
+      const now = new Date();
+      const diffInSeconds = (now - new Date(existingPending.createdAt)) / 1000;
+      
+      if (diffInSeconds < 60) {
+        const timeLeft = Math.ceil(60 - diffInSeconds);
+        return res.status(429).json({ 
+          error: `Veuillez patienter encore ${timeLeft} secondes avant de demander un nouveau code.` 
+        });
+      }
+    }
+    // --------------------------------------------------------
+
     // Generation du code a 6 chiffres
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Stockage persistant (upsert -> permet aussi le "renvoyer le code")
+    // Stockage persistant (upsert)
     await prisma.pendingRegistration.upsert({
       where: { email: normalizedEmail },
       update: {
         username: normalizedUsername,
         password: hashedPassword,
         code: verificationCode,
-        createdAt: new Date()
+        createdAt: new Date() // يتبدل الوقت لتحديث وقت آخر كود
       },
       create: {
         username: normalizedUsername,
@@ -108,8 +120,7 @@ app.post('/api/register-pending', async (req, res) => {
       }
     });
 
-    // Envoi de l'email. Si l'envoi echoue (identifiants SMTP invalides, quota...),
-    // on le signale clairement au lieu de laisser l'inscription bloquee sans explication.
+    // Envoi de l'email
     try {
       await transporter.sendMail({
         from: `"Glory Aures" <${process.env.EMAIL_USER}>`,

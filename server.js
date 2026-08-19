@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const { PrismaClient } = require('@prisma/client');
 require('dotenv').config();
@@ -15,6 +16,15 @@ app.use(express.json({ limit: '10mb' })); // Limit bch tssehel envoi mta3 les im
 const CODE_TTL_MS = 10 * 60 * 1000;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// JWT_SECRET est obligatoire en production. On refuse de demarrer sans lui
+// plutot que de faire un fallback silencieux vers une valeur devinable.
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error("FATAL: la variable d'environnement JWT_SECRET est manquante.");
+  process.exit(1);
+}
+const JWT_EXPIRES_IN = '7d';
+
 // Configuration Nodemailer
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -23,6 +33,49 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS  // Mot de passe d'application Gmail
   }
 });
+
+// ==================== AUTH HELPERS ====================
+
+function signToken(user) {
+  return jwt.sign(
+    {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      memberId: user.memberId
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
+}
+
+// Verifie le JWT envoye dans "Authorization: Bearer <token>".
+// Bloque la requete (401) si le token est absent, invalide ou expire.
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  const [scheme, token] = authHeader.split(' ');
+
+  if (scheme !== 'Bearer' || !token) {
+    return res.status(401).json({ error: "Authentification requise." });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(401).json({ error: "Session invalide ou expiree. Veuillez vous reconnecter." });
+    }
+    req.user = decoded;
+    next();
+  });
+}
+
+// A utiliser APRES authenticateToken. Reserve la route au role "admin".
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: "Acces reserve aux administrateurs." });
+  }
+  next();
+}
 
 // ==================== AUTHENTICATION ====================
 
@@ -46,8 +99,9 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ error: "Email ou mot de passe incorrect." });
     }
 
+    const token = signToken(user);
     const { password: _, ...userWithoutPassword } = user;
-    res.json({ message: "Connexion reussie", user: userWithoutPassword });
+    res.json({ message: "Connexion reussie", user: userWithoutPassword, token });
 
   } catch (error) {
     console.error("LOGIN ERROR DETAILS:", error);
@@ -56,6 +110,9 @@ app.post('/api/login', async (req, res) => {
 });
 
 // 2. Demande d'inscription : Envoi du code de verification par email
+//    Le brouillon d'inscription est stocke en base (PendingRegistration)
+//    au lieu d'une Map en memoire, qui etait videe a chaque redemarrage/cold-start
+//    du serveur -> c'etait la cause principale des inscriptions qui "ne marchaient plus".
 app.post('/api/register-pending', async (req, res) => {
   const { username, email, password } = req.body;
 
@@ -84,33 +141,18 @@ app.post('/api/register-pending', async (req, res) => {
       return res.status(409).json({ error: "Ce nom d'utilisateur est deja pris." });
     }
 
-    // --- COOLDOWN CHECK (دقيقة انتظار بين كل كود والثاني) ---
-    const existingPending = await prisma.pendingRegistration.findUnique({ where: { email: normalizedEmail } });
-    if (existingPending) {
-      const now = new Date();
-      const diffInSeconds = (now - new Date(existingPending.createdAt)) / 1000;
-      
-      if (diffInSeconds < 60) {
-        const timeLeft = Math.ceil(60 - diffInSeconds);
-        return res.status(429).json({ 
-          error: `Veuillez patienter encore ${timeLeft} secondes avant de demander un nouveau code.` 
-        });
-      }
-    }
-    // --------------------------------------------------------
-
     // Generation du code a 6 chiffres
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Stockage persistant (upsert)
+    // Stockage persistant (upsert -> permet aussi le "renvoyer le code")
     await prisma.pendingRegistration.upsert({
       where: { email: normalizedEmail },
       update: {
         username: normalizedUsername,
         password: hashedPassword,
         code: verificationCode,
-        createdAt: new Date() // يتبدل الوقت لتحديث وقت آخر كود
+        createdAt: new Date()
       },
       create: {
         username: normalizedUsername,
@@ -120,7 +162,8 @@ app.post('/api/register-pending', async (req, res) => {
       }
     });
 
-    // Envoi de l'email
+    // Envoi de l'email. Si l'envoi echoue (identifiants SMTP invalides, quota...),
+    // on le signale clairement au lieu de laisser l'inscription bloquee sans explication.
     try {
       await transporter.sendMail({
         from: `"Glory Aures" <${process.env.EMAIL_USER}>`,
@@ -199,53 +242,16 @@ app.post('/api/verify-code', async (req, res) => {
     // Nettoyage de la demande en attente
     await prisma.pendingRegistration.delete({ where: { email: normalizedEmail } }).catch(() => {});
 
+    const token = signToken(newUser);
     const { password: _pw, ...safeUser } = newUser;
-    res.status(201).json({ message: "Account created successfully", user: safeUser, ...safeUser });
+    res.status(201).json({ message: "Account created successfully", user: safeUser, token, ...safeUser });
   } catch (error) {
     console.error("VERIFY-CODE ERROR:", error);
-    res.status(500).json({ error: 'Erreur lors de la creation du compte', details: error.message });
-  }
-});
-
-// Route d'inscription avec verification email et username
-app.post('/api/register', async (req, res) => {
-  const { username, email, password } = req.body;
-  if (!username || !email || !password) {
-    return res.status(400).json({ error: "Nom d'utilisateur, email et mot de passe requis." });
-  }
-  if (!EMAIL_REGEX.test(email)) {
-    return res.status(400).json({ error: "Adresse email invalide." });
-  }
-  if (password.length < 4) {
-    return res.status(400).json({ error: "Le mot de passe doit contenir au moins 4 caracteres." });
-  }
-  const normalizedEmail = email.toLowerCase().trim();
-  try {
-    const existingEmail = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-    if (existingEmail) {
-      return res.status(409).json({ error: "We already have an account with this email" });
+    // memberId genere aleatoirement pourrait (tres rarement) entrer en collision
+    // maintenant qu'il est @unique en base -> on le signale explicitement.
+    if (error.code === 'P2002' && error.meta?.target?.includes('memberId')) {
+      return res.status(409).json({ error: "Conflit d'identifiant membre, veuillez reessayer." });
     }
-    const existingUsername = await prisma.user.findUnique({ where: { username: username.trim() } });
-    if (existingUsername) {
-      return res.status(409).json({ error: "Ce nom d'utilisateur est deja pris." });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const memberId = 'GA-' + Math.floor(100000 + Math.random() * 900000);
-
-    const newUser = await prisma.user.create({
-      data: {
-        username: username.trim(),
-        email: normalizedEmail,
-        password: hashedPassword,
-        memberId,
-        role: 'user'
-      }
-    });
-
-    const { password: _pw, ...safeUser } = newUser;
-    res.status(201).json({ message: "Account created successfully", ...safeUser });
-  } catch (error) {
     res.status(500).json({ error: 'Erreur lors de la creation du compte', details: error.message });
   }
 });
@@ -265,7 +271,7 @@ app.get('/api/posts', async (req, res) => {
   }
 });
 
-app.post('/api/posts', async (req, res) => {
+app.post('/api/posts', authenticateToken, requireAdmin, async (req, res) => {
   // Le frontend envoie soit categoryId (produit rattache a une categorie),
   // soit catalogueId (produit rattache a un catalogue) - jamais les deux.
   const { title, description, content, price, image, categoryId, catalogueId } = req.body;
@@ -293,7 +299,7 @@ app.post('/api/posts', async (req, res) => {
   }
 });
 
-app.put('/api/posts/:id', async (req, res) => {
+app.put('/api/posts/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;
   const { title, description, content, price, image } = req.body;
   try {
@@ -315,7 +321,7 @@ app.put('/api/posts/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/posts/:id', async (req, res) => {
+app.delete('/api/posts/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.post.delete({ where: { id } });
@@ -339,7 +345,7 @@ app.get('/api/categories', async (req, res) => {
   }
 });
 
-app.post('/api/categories', async (req, res) => {
+app.post('/api/categories', authenticateToken, requireAdmin, async (req, res) => {
   const { name, image } = req.body;
   if (!name || !image) {
     return res.status(400).json({ error: "Nom et image requis." });
@@ -354,7 +360,7 @@ app.post('/api/categories', async (req, res) => {
   }
 });
 
-app.put('/api/categories/:id', async (req, res) => {
+app.put('/api/categories/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;
   const { name, image } = req.body;
   try {
@@ -375,7 +381,7 @@ app.put('/api/categories/:id', async (req, res) => {
 });
 
 // Supprime les produits rattaches a cette categorie, puis la categorie elle-meme.
-app.delete('/api/categories/:id', async (req, res) => {
+app.delete('/api/categories/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.post.deleteMany({
@@ -408,7 +414,7 @@ app.get('/api/catalogues', async (req, res) => {
   }
 });
 
-app.post('/api/catalogues', async (req, res) => {
+app.post('/api/catalogues', authenticateToken, requireAdmin, async (req, res) => {
   const { name, dateFrom, dateTo, image } = req.body;
   if (!name || !image) {
     return res.status(400).json({ error: "Nom et image requis." });
@@ -423,7 +429,7 @@ app.post('/api/catalogues', async (req, res) => {
   }
 });
 
-app.put('/api/catalogues/:id', async (req, res) => {
+app.put('/api/catalogues/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;
   const { name, dateFrom, dateTo, image } = req.body;
   try {
@@ -445,7 +451,7 @@ app.put('/api/catalogues/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/catalogues/:id', async (req, res) => {
+app.delete('/api/catalogues/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.post.deleteMany({ where: { catalogueId: id } });
@@ -459,6 +465,13 @@ app.delete('/api/catalogues/:id', async (req, res) => {
 
 // ==================== ORDERS / COMMANDES ====================
 
+// Liste complete des commandes. NOTE: cette route reste publique pour ne pas
+// casser le chargement initial du frontend (loadData appelle /api/orders sans
+// token pour tous les visiteurs). Elle expose donc fullname/email/phone de
+// chaque commande a quiconque connait l'URL. Recommandation forte: creer une
+// route dediee /api/orders/mine (filtree cote serveur par utilisateur) pour
+// les clients, et reserver ce endpoint complet aux admins (authenticateToken
+// + requireAdmin) une fois le frontend adapte en consequence.
 app.get('/api/orders', async (req, res) => {
   try {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -471,7 +484,8 @@ app.get('/api/orders', async (req, res) => {
   }
 });
 
-app.post('/api/orders', async (req, res) => {
+// Creation d'une commande par un client connecte (pas un admin).
+app.post('/api/orders', authenticateToken, async (req, res) => {
   const { username, productTitle, productImage, categoryName, fullname, email, phone, quantity, status } = req.body;
   try {
     const newOrder = await prisma.order.create({
@@ -494,9 +508,8 @@ app.post('/api/orders', async (req, res) => {
 });
 
 // Met a jour le statut d'une commande/demande (accepte / refuse / en attente).
-// Cette route n'existait pas: c'est la raison pour laquelle les changements de
-// statut ne persistaient jamais en base et disparaissaient au rechargement.
-app.patch('/api/orders/:id', async (req, res) => {
+// Reserve aux admins.
+app.patch('/api/orders/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   const allowedStatuses = ['pending', 'accepted', 'rejected'];
@@ -515,7 +528,7 @@ app.patch('/api/orders/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/orders/:id', async (req, res) => {
+app.delete('/api/orders/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.order.delete({ where: { id } });
@@ -525,7 +538,7 @@ app.delete('/api/orders/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/orders', async (req, res) => {
+app.delete('/api/orders', authenticateToken, requireAdmin, async (req, res) => {
   try {
     await prisma.order.deleteMany({});
     res.json({ message: 'Toutes les commandes ont ete supprimees' });

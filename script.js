@@ -257,6 +257,9 @@ async function handleAuthRegister(e) {
       pendingRegistration = { username, email, password };
       showToast('success', "Code de vérification envoyé par email.");
       showVerificationStep();
+    } else if (res.status === 409) {
+      // معالجة خاصة لخطأ التعارض (الإيميل أو اسم المستخدم مستخدم مسبقاً)
+      showToast('error', data.error || "Cet email ou nom d'utilisateur est déjà utilisé.");
     } else {
       showToast('error', data.error || "Erreur lors de l'inscription.");
     }

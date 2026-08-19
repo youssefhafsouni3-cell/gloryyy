@@ -226,6 +226,7 @@ async function handleAuthRegister(e) {
   const email = document.getElementById('reg-email').value.trim().toLowerCase();
   const password = document.getElementById('reg-password').value.trim();
 
+  // التحقق من المدخلات...
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailPattern.test(email)) {
     showToast('error', "Veuillez saisir une adresse email valide.");
@@ -239,11 +240,12 @@ async function handleAuthRegister(e) {
   const btnSubmit = document.getElementById('btn-reg-submit');
   if (btnSubmit) {
     btnSubmit.disabled = true;
-    btnSubmit.innerText = "Envoi du code...";
+    btnSubmit.innerText = "Création en cours...";
   }
 
   try {
-    const res = await fetch(`${API_BASE_URL}/api/register-pending`, {
+    // نغير الرابط إلى مسار التسجيل النهائي المباشر (تأكد من اسم الـ Route في السيرفر، مثلاً /api/register)
+    const res = await fetch(`${API_BASE_URL}/api/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -254,11 +256,12 @@ async function handleAuthRegister(e) {
     const data = await res.json();
 
     if (res.ok) {
-      pendingRegistration = { username, email, password };
-      showToast('success', "Code de vérification envoyé par email.");
-      showVerificationStep();
+      showToast('success', "Compte créé avec succès !");
+      // توجيه المستخدم لصفحة تسجيل الدخول أو لوحة التحكم
+      setTimeout(() => {
+        window.location.href = 'login.html'; // أو صفحة الـ Dashboard
+      }, 1500);
     } else if (res.status === 409) {
-      // معالجة خاصة لخطأ التعارض (الإيميل أو اسم المستخدم مستخدم مسبقاً)
       showToast('error', data.error || "Cet email ou nom d'utilisateur est déjà utilisé.");
     } else {
       showToast('error', data.error || "Erreur lors de l'inscription.");

@@ -13,7 +13,9 @@ model User {
   email    String  @unique
   password String
   role     String  @default("user")
-  memberId String?
+  // Identifiant public (ex: "GA-123456"). Rendu unique pour eviter toute
+  // collision silencieuse lors de la generation aleatoire dans server.js.
+  memberId String? @unique
 }
 
 // Stocke les inscriptions en attente de confirmation par code email.

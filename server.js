@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const { PrismaClient } = require('@prisma/client');
 require('dotenv').config();
@@ -16,66 +15,19 @@ app.use(express.json({ limit: '10mb' })); // Limit bch tssehel envoi mta3 les im
 const CODE_TTL_MS = 10 * 60 * 1000;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// JWT_SECRET est obligatoire en production. On refuse de demarrer sans lui
-// plutot que de faire un fallback silencieux vers une valeur devinable.
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  console.error("FATAL: la variable d'environnement JWT_SECRET est manquante.");
-  process.exit(1);
-}
-const JWT_EXPIRES_IN = '7d';
-
 // Configuration Nodemailer
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
   auth: {
-    user: process.env.EMAIL_USER, // Votre email Gmail
-    pass: process.env.EMAIL_PASS  // Mot de passe d'application Gmail
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false
   }
 });
-
-// ==================== AUTH HELPERS ====================
-
-function signToken(user) {
-  return jwt.sign(
-    {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      memberId: user.memberId
-    },
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN }
-  );
-}
-
-// Verifie le JWT envoye dans "Authorization: Bearer <token>".
-// Bloque la requete (401) si le token est absent, invalide ou expire.
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers.authorization || '';
-  const [scheme, token] = authHeader.split(' ');
-
-  if (scheme !== 'Bearer' || !token) {
-    return res.status(401).json({ error: "Authentification requise." });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
-    if (err) {
-      return res.status(401).json({ error: "Session invalide ou expiree. Veuillez vous reconnecter." });
-    }
-    req.user = decoded;
-    next();
-  });
-}
-
-// A utiliser APRES authenticateToken. Reserve la route au role "admin".
-function requireAdmin(req, res, next) {
-  if (!req.user || req.user.role !== 'admin') {
-    return res.status(403).json({ error: "Acces reserve aux administrateurs." });
-  }
-  next();
-}
 
 // ==================== AUTHENTICATION ====================
 
@@ -99,9 +51,8 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ error: "Email ou mot de passe incorrect." });
     }
 
-    const token = signToken(user);
     const { password: _, ...userWithoutPassword } = user;
-    res.json({ message: "Connexion reussie", user: userWithoutPassword, token });
+    res.json({ message: "Connexion reussie", user: userWithoutPassword });
 
   } catch (error) {
     console.error("LOGIN ERROR DETAILS:", error);
@@ -110,7 +61,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 // 2. Demande d'inscription : Envoi du code de verification par email
-//    Le brouillon d'inscription est stocke en base (PendingRegistration)
+//    Le brouillon d'inscription est desormais stocke en base (PendingRegistration)
 //    au lieu d'une Map en memoire, qui etait videe a chaque redemarrage/cold-start
 //    du serveur -> c'etait la cause principale des inscriptions qui "ne marchaient plus".
 app.post('/api/register-pending', async (req, res) => {
@@ -242,17 +193,49 @@ app.post('/api/verify-code', async (req, res) => {
     // Nettoyage de la demande en attente
     await prisma.pendingRegistration.delete({ where: { email: normalizedEmail } }).catch(() => {});
 
-    const token = signToken(newUser);
     const { password: _pw, ...safeUser } = newUser;
-    res.status(201).json({ message: "Account created successfully", user: safeUser, token, ...safeUser });
+    res.status(201).json({ message: "Account created successfully", user: safeUser, ...safeUser });
   } catch (error) {
     console.error("VERIFY-CODE ERROR:", error);
-    // memberId genere aleatoirement pourrait (tres rarement) entrer en collision
-    // maintenant qu'il est @unique en base -> on le signale explicitement.
-    if (error.code === 'P2002' && error.meta?.target?.includes('memberId')) {
-      return res.status(409).json({ error: "Conflit d'identifiant membre, veuillez reessayer." });
-    }
     res.status(500).json({ error: 'Erreur lors de la creation du compte', details: error.message });
+  }
+});
+
+// Ancienne route d'inscription directe (conservee si besoin, sans verification email)
+// مثال على مسار التسجيل المباشر في server.js
+app.post('/api/register', async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+
+    // 1. التحقق هل المستخدم موجود مسبقاً
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ email }, { username }]
+      }
+    });
+
+    if (existingUser) {
+      return res.status(409).json({ error: "Cet email ou nom d'utilisateur est déjà utilisé." });
+    }
+
+    // 2. تشفير كلمة المرور (إذا كنت تستخدم bcrypt)
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 3. إنشاء المستخدم في قاعدة البيانات مباشرة
+    const newUser = await prisma.user.create({
+      data: {
+        username,
+        email,
+        password: hashedPassword,
+        role: 'user' // أو الدور الافتراضي
+      }
+    });
+
+    res.status(201).json({ message: "Compte créé avec succès", user: newUser });
+
+  } catch (error) {
+    console.error("Erreur lors de l'inscription:", error);
+    res.status(500).json({ error: "Erreur interne du serveur." });
   }
 });
 
@@ -271,7 +254,7 @@ app.get('/api/posts', async (req, res) => {
   }
 });
 
-app.post('/api/posts', authenticateToken, requireAdmin, async (req, res) => {
+app.post('/api/posts', async (req, res) => {
   // Le frontend envoie soit categoryId (produit rattache a une categorie),
   // soit catalogueId (produit rattache a un catalogue) - jamais les deux.
   const { title, description, content, price, image, categoryId, catalogueId } = req.body;
@@ -299,7 +282,7 @@ app.post('/api/posts', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-app.put('/api/posts/:id', authenticateToken, requireAdmin, async (req, res) => {
+app.put('/api/posts/:id', async (req, res) => {
   const { id } = req.params;
   const { title, description, content, price, image } = req.body;
   try {
@@ -321,7 +304,7 @@ app.put('/api/posts/:id', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-app.delete('/api/posts/:id', authenticateToken, requireAdmin, async (req, res) => {
+app.delete('/api/posts/:id', async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.post.delete({ where: { id } });
@@ -345,7 +328,7 @@ app.get('/api/categories', async (req, res) => {
   }
 });
 
-app.post('/api/categories', authenticateToken, requireAdmin, async (req, res) => {
+app.post('/api/categories', async (req, res) => {
   const { name, image } = req.body;
   if (!name || !image) {
     return res.status(400).json({ error: "Nom et image requis." });
@@ -360,7 +343,7 @@ app.post('/api/categories', authenticateToken, requireAdmin, async (req, res) =>
   }
 });
 
-app.put('/api/categories/:id', authenticateToken, requireAdmin, async (req, res) => {
+app.put('/api/categories/:id', async (req, res) => {
   const { id } = req.params;
   const { name, image } = req.body;
   try {
@@ -381,7 +364,7 @@ app.put('/api/categories/:id', authenticateToken, requireAdmin, async (req, res)
 });
 
 // Supprime les produits rattaches a cette categorie, puis la categorie elle-meme.
-app.delete('/api/categories/:id', authenticateToken, requireAdmin, async (req, res) => {
+app.delete('/api/categories/:id', async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.post.deleteMany({
@@ -414,7 +397,7 @@ app.get('/api/catalogues', async (req, res) => {
   }
 });
 
-app.post('/api/catalogues', authenticateToken, requireAdmin, async (req, res) => {
+app.post('/api/catalogues', async (req, res) => {
   const { name, dateFrom, dateTo, image } = req.body;
   if (!name || !image) {
     return res.status(400).json({ error: "Nom et image requis." });
@@ -429,7 +412,7 @@ app.post('/api/catalogues', authenticateToken, requireAdmin, async (req, res) =>
   }
 });
 
-app.put('/api/catalogues/:id', authenticateToken, requireAdmin, async (req, res) => {
+app.put('/api/catalogues/:id', async (req, res) => {
   const { id } = req.params;
   const { name, dateFrom, dateTo, image } = req.body;
   try {
@@ -451,7 +434,7 @@ app.put('/api/catalogues/:id', authenticateToken, requireAdmin, async (req, res)
   }
 });
 
-app.delete('/api/catalogues/:id', authenticateToken, requireAdmin, async (req, res) => {
+app.delete('/api/catalogues/:id', async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.post.deleteMany({ where: { catalogueId: id } });
@@ -465,13 +448,6 @@ app.delete('/api/catalogues/:id', authenticateToken, requireAdmin, async (req, r
 
 // ==================== ORDERS / COMMANDES ====================
 
-// Liste complete des commandes. NOTE: cette route reste publique pour ne pas
-// casser le chargement initial du frontend (loadData appelle /api/orders sans
-// token pour tous les visiteurs). Elle expose donc fullname/email/phone de
-// chaque commande a quiconque connait l'URL. Recommandation forte: creer une
-// route dediee /api/orders/mine (filtree cote serveur par utilisateur) pour
-// les clients, et reserver ce endpoint complet aux admins (authenticateToken
-// + requireAdmin) une fois le frontend adapte en consequence.
 app.get('/api/orders', async (req, res) => {
   try {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -484,8 +460,7 @@ app.get('/api/orders', async (req, res) => {
   }
 });
 
-// Creation d'une commande par un client connecte (pas un admin).
-app.post('/api/orders', authenticateToken, async (req, res) => {
+app.post('/api/orders', async (req, res) => {
   const { username, productTitle, productImage, categoryName, fullname, email, phone, quantity, status } = req.body;
   try {
     const newOrder = await prisma.order.create({
@@ -508,8 +483,9 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
 });
 
 // Met a jour le statut d'une commande/demande (accepte / refuse / en attente).
-// Reserve aux admins.
-app.patch('/api/orders/:id', authenticateToken, requireAdmin, async (req, res) => {
+// Cette route n'existait pas: c'est la raison pour laquelle les changements de
+// statut ne persistaient jamais en base et disparaissaient au rechargement.
+app.patch('/api/orders/:id', async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   const allowedStatuses = ['pending', 'accepted', 'rejected'];
@@ -528,7 +504,7 @@ app.patch('/api/orders/:id', authenticateToken, requireAdmin, async (req, res) =
   }
 });
 
-app.delete('/api/orders/:id', authenticateToken, requireAdmin, async (req, res) => {
+app.delete('/api/orders/:id', async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.order.delete({ where: { id } });
@@ -538,7 +514,7 @@ app.delete('/api/orders/:id', authenticateToken, requireAdmin, async (req, res) 
   }
 });
 
-app.delete('/api/orders', authenticateToken, requireAdmin, async (req, res) => {
+app.delete('/api/orders', async (req, res) => {
   try {
     await prisma.order.deleteMany({});
     res.json({ message: 'Toutes les commandes ont ete supprimees' });
@@ -549,7 +525,7 @@ app.delete('/api/orders', authenticateToken, requireAdmin, async (req, res) => {
 
 // ==================== DEMARRAGE DU SERVEUR ====================
 
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => {
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

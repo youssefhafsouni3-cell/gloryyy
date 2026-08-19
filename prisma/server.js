@@ -19,7 +19,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
-  secure: false, 
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -27,9 +27,8 @@ const transporter = nodemailer.createTransport({
   tls: {
     rejectUnauthorized: false
   },
-  connectionTimeout: 10000 // انتظار 10 ثوانٍ فقط للاتصال
+  family: 4 // اجبار الاتصال عبر IPv4 لتجنب حظر الشبكة على Render
 });
-
 // ==================== AUTHENTICATION ====================
 
 // 1. Login via email + password

@@ -259,7 +259,7 @@ async function handleAuthRegister(e) {
       showToast('success', "Compte créé avec succès !");
       // توجيه المستخدم لصفحة تسجيل الدخول أو لوحة التحكم
       setTimeout(() => {
-        window.location.href = 'login.html'; // أو صفحة الـ Dashboard
+        window.location.href = 'index.html'; // أو صفحة الـ Dashboard
       }, 1500);
     } else if (res.status === 409) {
       showToast('error', data.error || "Cet email ou nom d'utilisateur est déjà utilisé.");

@@ -43,7 +43,6 @@
   <!-- AUTH SCREEN -->
   <div id="auth-screen" class="fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300">
 
-    <!-- Animated 4K-style cinematic background -->
     <div class="auth-bg-mesh"></div>
     <div class="auth-bg-grid"></div>
     <div class="auth-orb o1"></div>
@@ -85,7 +84,9 @@
                 </button>
               </div>
             </div>
-            <button type="submit" class="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold rounded-xl text-sm transition-all duration-200 shadow-lg shadow-emerald-600/25 active:scale-[0.99]">Connexion</button>
+            <button type="submit" id="btn-login-submit" class="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold rounded-xl text-sm transition-all duration-200 shadow-lg shadow-emerald-600/25 active:scale-[0.99] flex items-center justify-center gap-2">
+              <span>Connexion</span>
+            </button>
           </form>
 
           <form id="form-register" onsubmit="handleAuthRegister(event)" class="space-y-4 hidden">
@@ -106,11 +107,9 @@
                 </button>
               </div>
             </div>
-            <p class="text-[11px] text-slate-500 font-medium flex items-start gap-1.5 bg-emerald-50/70 border border-emerald-100 rounded-xl px-3 py-2.5">
-              <i class="fa-solid fa-circle-info text-emerald-600 mt-0.5"></i>
-              <span>Un code de vérification à 6 chiffres sera envoyé à votre email pour confirmer votre compte.</span>
-            </p>
-            <button type="submit" id="btn-reg-submit" class="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold rounded-xl text-sm transition-all duration-200 shadow-lg shadow-emerald-600/25 active:scale-[0.99]">Créer un compte</button>
+            <button type="submit" id="btn-reg-submit" class="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold rounded-xl text-sm transition-all duration-200 shadow-lg shadow-emerald-600/25 active:scale-[0.99] flex items-center justify-center gap-2">
+              <span>Créer un compte</span>
+            </button>
           </form>
         </div>
 
@@ -158,6 +157,7 @@
           </div>
         </div>
 
+        <!-- Desktop Navigation Links -->
         <nav class="hidden md:flex items-center gap-8 text-xs font-bold text-slate-600">
           <a href="#" onclick="openCategoriesView()" id="nav-home" class="hover:text-emerald-600 transition-colors">Accueil</a>
           <a href="#categories-section" onclick="openCategoriesView()" id="nav-categories" class="hover:text-emerald-600 transition-colors">Catégories</a>
@@ -223,7 +223,7 @@
             <i class="fa-solid fa-right-from-bracket text-sm sm:text-base"></i>
           </button>
 
-          <!-- BURGER TOGGLE (mobile uniquement) -->
+          <!-- BURGER TOGGLE (Mobile Only) -->
           <button id="mobile-menu-btn" onclick="toggleMobileMenu()" class="md:hidden w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-100 hover:text-emerald-600 transition-all shrink-0 ml-0.5" aria-label="Menu" aria-expanded="false">
             <i class="fa-solid fa-bars text-base" id="mobile-menu-icon"></i>
           </button>
@@ -231,11 +231,25 @@
 
       </div>
 
-      <!-- MENU MOBILE DEROULANT -->
-      <nav id="mobile-menu" class="md:hidden hidden flex-col border-t border-slate-100 bg-white/95 backdrop-blur-md animate-fade-in">
-        <a href="#" onclick="openCategoriesView(); closeMobileMenu();" class="px-6 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-emerald-600 border-b border-slate-50">Accueil</a>
-        <a href="#categories-section" onclick="openCategoriesView(); closeMobileMenu();" class="px-6 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-emerald-600 border-b border-slate-50">Catégories</a>
-        <a href="#footer-section" onclick="closeMobileMenu();" class="px-6 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-emerald-600">Contact</a>
+      <!-- MENU MOBILE DEROULANT (حسب الطلب: يحتوي على خيارات التصفح واللغة) -->
+      <nav id="mobile-menu" class="md:hidden hidden flex-col border-t border-slate-100 bg-white/95 backdrop-blur-md animate-fade-in shadow-lg">
+        <a href="#" onclick="openCategoriesView(); closeMobileMenu();" class="px-6 py-3.5 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-600 border-b border-slate-50 flex items-center gap-3">
+          <i class="fa-solid fa-house w-4 text-emerald-600"></i> Accueil
+        </a>
+        <a href="#categories-section" onclick="openCategoriesView(); closeMobileMenu();" class="px-6 py-3.5 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-600 border-b border-slate-50 flex items-center gap-3">
+          <i class="fa-solid fa-grid-2 w-4 text-emerald-600"></i> Catégories
+        </a>
+        <a href="#footer-section" onclick="closeMobileMenu();" class="px-6 py-3.5 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-600 border-b border-slate-50 flex items-center gap-3">
+          <i class="fa-solid fa-address-book w-4 text-emerald-600"></i> Contact
+        </a>
+        <div class="px-6 py-3.5 flex items-center justify-between text-xs font-bold text-slate-700">
+          <span class="flex items-center gap-3"><i class="fa-solid fa-globe w-4 text-emerald-600"></i> Langue / Language</span>
+          <select id="mobile-lang-select" onchange="changeLanguage(this.value); closeMobileMenu();" class="bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg font-bold text-xs outline-none text-emerald-700">
+            <option value="fr">FR</option>
+            <option value="eng">EN</option>
+            <option value="ar">AR</option>
+          </select>
+        </div>
       </nav>
     </header>
 
@@ -356,7 +370,7 @@
                 <i class="fa-solid fa-sparkles text-emerald-600"></i> Qualité Supérieure Garantie
               </span>
               <h2 class="text-4xl sm:text-6xl font-black text-slate-900 leading-[1.15] max-w-2xl tracking-tight" id="hero-title">
-                Votre societe en ligne de confiance
+                Votre épicerie en ligne de confiance
               </h2>
               <p class="text-base text-slate-600 max-w-lg leading-relaxed font-medium" id="hero-desc">
                 Découvrez une sélection de produits alimentaires et d'articles de tous les jours de qualité
@@ -369,7 +383,6 @@
               </div>
             </div>
 
-            <!-- ANIMATED PRODUCT SHOWCASE -->
             <div id="hero-products-showcase" class="relative h-[380px] sm:h-[440px] hidden lg:block"></div>
           </div>
         </section>
@@ -382,7 +395,6 @@
           </div>
           <div id="catalogues-container" class="space-y-6"></div>
         </section>
-
 
         <!-- SECTION: POURQUOI CHOISIR GLORY AURES -->
         <section class="py-16 bg-white border-b border-slate-100">
@@ -531,12 +543,12 @@
 
     </main>
 
-    <!-- FOOTER -->
+    <!-- FOOTER (محدث مع إضافة إنستغرام المطور/الشركة) -->
     <footer id="footer-section" class="bg-slate-950 text-slate-400 py-16 text-xs mt-16 border-t border-slate-800">
       <div class="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-10 text-left">
         <div class="space-y-4">
           <img src="logo.jpg" alt="Glory Aures" class="w-10 h-10 rounded-full object-cover">
-          <p class="text-slate-400 leading-relaxed">Glory Aures International Company- Votre solution globale de confiance.</p>
+          <p class="text-slate-400 leading-relaxed">Glory Aures International - Votre solution globale de confiance.</p>
         </div>
 
         <div class="space-y-3">
@@ -549,11 +561,17 @@
         </div>
 
         <div class="space-y-3">
-          <h4 class="font-extrabold text-white text-sm uppercase tracking-wider border-b border-slate-800 pb-2 inline-block">Suivez-nous</h4>
+          <h4 class="font-extrabold text-white text-sm uppercase tracking-wider border-b border-slate-800 pb-2 inline-block">Suivez-nous & Développeur</h4>
           <div class="flex items-center gap-3">
-            <a href="https://facebook.com/profile.php?id=61592634459343" target="_blank" class="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-emerald-500"><i class="fa-brands fa-facebook-f"></i></a>
-            <a href="https://instagram.com/gloryaures?igsh=MWd2DJ0OWF6aXZueQ==&igsi=MWd2dDJ0OWF6aXZueQ==" target="_blank" class="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-emerald-500"><i class="fa-brands fa-instagram"></i></a>
+            <a href="https://facebook.com" target="_blank" class="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-emerald-500"><i class="fa-brands fa-facebook-f"></i></a>
+            <a href="https://instagram.com" target="_blank" class="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-emerald-500"><i class="fa-brands fa-instagram"></i></a>
             <a href="https://wa.me/213794180425" target="_blank" class="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-emerald-500"><i class="fa-brands fa-whatsapp"></i></a>
+          </div>
+          <!-- إضافة رابط إنستغرام المطور -->
+          <div class="pt-2">
+            <a href="https://instagram.com/hafsouni_youssef?igsh=MTJ6MjZnbDFscHg2MA==&igsi=MTJ6MjZnbDFscHg2MA== target="_blank" class="inline-flex items-center gap-2 text-slate-400 hover:text-emerald-400 transition-colors">
+              <i class="fa-brands fa-instagram text-emerald-500"></i> <span>Instagram Développeur</span>
+            </a>
           </div>
         </div>
       </div>
@@ -563,7 +581,7 @@
     </footer>
   </div>
 
-  <!-- MODAL EDIT CATEGORY -->
+  <!-- MODALS -->
   <div id="modal-edit-category" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md hidden animate-fade-in">
     <div class="glass-card rounded-3xl p-6 sm:p-8 shadow-2xl border border-emerald-100 w-full max-w-lg relative overflow-hidden">
       <div class="flex items-center justify-between border-b border-slate-200/80 pb-4 mb-4">
@@ -577,17 +595,14 @@
 
       <form onsubmit="handleCategoryEditSubmit(event)" class="space-y-4">
         <input type="hidden" id="edit-category-id">
-
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Nom de la catégorie:</label>
           <input type="text" id="edit-category-name" required class="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-emerald-600 transition-all">
         </div>
-
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Changer l'image (optionnel):</label>
           <input type="file" id="edit-category-image-file" accept="image/*" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-100 file:text-emerald-700 cursor-pointer">
         </div>
-
         <div class="flex items-center gap-3 pt-2">
           <button type="button" onclick="closeEditCategoryModal()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all">Annuler</button>
           <button type="submit" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-emerald-600/20">Enregistrer</button>
@@ -596,7 +611,6 @@
     </div>
   </div>
 
-  <!-- MODAL EDIT CATALOGUE -->
   <div id="modal-edit-catalogue" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md hidden animate-fade-in">
     <div class="glass-card rounded-3xl p-6 sm:p-8 shadow-2xl border border-emerald-100 w-full max-w-lg relative overflow-hidden">
       <div class="flex items-center justify-between border-b border-slate-200/80 pb-4 mb-4">
@@ -610,12 +624,10 @@
 
       <form onsubmit="handleCatalogueEditSubmit(event)" class="space-y-4">
         <input type="hidden" id="edit-catalogue-id">
-
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Nom du catalogue:</label>
           <input type="text" id="edit-catalogue-name" required class="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-emerald-600 transition-all">
         </div>
-
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-bold text-slate-700 mb-1">Du:</label>
@@ -626,12 +638,10 @@
             <input type="date" id="edit-catalogue-date-to" required class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-emerald-600 transition-all">
           </div>
         </div>
-
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Changer l'image (optionnel):</label>
           <input type="file" id="edit-catalogue-image-file" accept="image/*" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-100 file:text-emerald-700 cursor-pointer">
         </div>
-
         <div class="flex items-center gap-3 pt-2">
           <button type="button" onclick="closeEditCatalogueModal()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all">Annuler</button>
           <button type="submit" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-emerald-600/20">Enregistrer</button>
@@ -640,7 +650,6 @@
     </div>
   </div>
 
-  <!-- MODAL QUICK ADD PRODUCT (depuis la page catalogue/catégorie) -->
   <div id="modal-quick-add-product" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md hidden animate-fade-in">
     <div class="glass-card rounded-3xl p-6 sm:p-8 shadow-2xl border border-emerald-100 w-full max-w-lg relative overflow-hidden">
       <div class="flex items-center justify-between border-b border-slate-200/80 pb-4 mb-4">
@@ -655,22 +664,18 @@
       <form onsubmit="handleQuickAddProductSubmit(event)" class="space-y-4">
         <input type="hidden" id="quick-add-target-type" value="category">
         <input type="hidden" id="quick-add-cat-id">
-
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Titre du produit:</label>
           <input type="text" id="quick-add-title" required placeholder="Nom du produit" class="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-emerald-600 transition-all">
         </div>
-
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Description:</label>
           <textarea id="quick-add-content" required rows="3" placeholder="Détails du produit..." class="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-emerald-600 transition-all"></textarea>
         </div>
-
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Image:</label>
           <input type="file" id="quick-add-image-file" accept="image/*" required class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-100 file:text-emerald-700 cursor-pointer">
         </div>
-
         <div class="flex items-center gap-3 pt-2">
           <button type="button" onclick="closeQuickAddProductModal()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all">Annuler</button>
           <button type="submit" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-emerald-600/20">Publier</button>
@@ -679,7 +684,6 @@
     </div>
   </div>
 
-  <!-- MODAL EDIT PRODUCT -->
   <div id="modal-edit-product" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md hidden animate-fade-in">
     <div class="glass-card rounded-3xl p-6 sm:p-8 shadow-2xl border border-emerald-100 w-full max-w-lg relative overflow-hidden">
       <div class="flex items-center justify-between border-b border-slate-200/80 pb-4 mb-4">
@@ -729,7 +733,6 @@
     </div>
   </div>
 
-  <!-- MODAL LOGOUT CONFIRMATION -->
   <div id="modal-logout-confirm" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md hidden animate-fade-in">
     <div class="glass-card rounded-3xl p-6 sm:p-8 shadow-2xl border border-rose-100 w-full max-w-sm relative overflow-hidden text-center">
       <div class="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center text-2xl mx-auto mb-4 shadow-inner">

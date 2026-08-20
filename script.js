@@ -214,10 +214,6 @@ async function handleAuthLogin(e) {
 
 // ==================== REGISTRATION WITH EMAIL VERIFICATION ====================
 
-let pendingRegistration = null;
-let verifyCountdownInterval = null;
-const VERIFY_COUNTDOWN_SECONDS = 60;
-
 function generateMemberId() {
   const num = Math.floor(100000 + Math.random() * 900000);
   return 'GA-' + num;
@@ -305,10 +301,10 @@ async function handleAuthRegister(e) {
     const data = await res.json();
 
     if (res.ok) {
-      // Stocker les données temporaires pour l'étape de vérification par email
-      pendingRegistration = { username, email, password };
-      showToast('success', "Code de vérification envoyé par email !");
-      showVerificationStep();
+      showToast('success', "Compte créé avec succès !");
+      setTimeout(() => {
+        switchAuthTab('login');
+      }, 1500);
     } else if (res.status === 409) {
       showToast('error', data.error || "Cet email ou nom d'utilisateur est déjà utilisé.");
     } else {
@@ -326,26 +322,18 @@ async function handleAuthRegister(e) {
 }
 
 function showVerificationStep() {
-  const stepCredentials = document.getElementById('auth-step-credentials');
-  const stepVerify = document.getElementById('auth-step-verify');
-  const targetEmail = document.getElementById('verify-target-email');
-  const verifyCode = document.getElementById('verify-code');
-
-  if (stepCredentials) stepCredentials.classList.add('hidden');
-  if (stepVerify) stepVerify.classList.remove('hidden');
-  if (targetEmail && pendingRegistration) targetEmail.innerText = pendingRegistration.email;
-  if (verifyCode) verifyCode.value = '';
+  document.getElementById('auth-step-credentials').classList.add('hidden');
+  document.getElementById('auth-step-verify').classList.remove('hidden');
+  document.getElementById('verify-target-email').innerText = pendingRegistration.email;
+  document.getElementById('verify-code').value = '';
   startVerifyCountdown();
 }
 
 function backToRegisterStep() {
   pendingRegistration = null;
   stopVerifyCountdown();
-  const stepVerify = document.getElementById('auth-step-verify');
-  const stepCredentials = document.getElementById('auth-step-credentials');
-
-  if (stepVerify) stepVerify.classList.add('hidden');
-  if (stepCredentials) stepCredentials.classList.remove('hidden');
+  document.getElementById('auth-step-verify').classList.add('hidden');
+  document.getElementById('auth-step-credentials').classList.remove('hidden');
 }
 
 // ==================== EMAIL VERIFICATION COUNTDOWN (1 MINUTE) ====================
@@ -421,8 +409,7 @@ async function resendVerificationCode() {
 async function handleVerifyCode(e) {
   e.preventDefault();
   if (!pendingRegistration) return;
-  const enteredInput = document.getElementById('verify-code');
-  const entered = enteredInput ? enteredInput.value.trim() : '';
+  const entered = document.getElementById('verify-code').value.trim();
 
   try {
     const res = await fetch(`${API_BASE_URL}/api/verify-code`, {
@@ -438,7 +425,7 @@ async function handleVerifyCode(e) {
     }
 
     stopVerifyCountdown();
-    const currentUser = data.user || data;
+    currentUser = data.user || data;
     currentView = 'categories';
     pendingRegistration = null;
     localStorage.setItem('user', JSON.stringify(currentUser));
@@ -503,6 +490,7 @@ function showToast(type, message) {
     setTimeout(() => el.remove(), 350);
   }, 4000);
 }
+
 // ==================== AUTH SCREEN VISUAL EFFECTS ====================
 
 function initAuthVisualEffects() {

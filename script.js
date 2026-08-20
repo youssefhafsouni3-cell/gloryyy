@@ -34,7 +34,7 @@ const translations = {
     view: "Voir", addToCart: "Ajouter au panier", noProducts: "Aucun article dans ce panier.",
     noCategories: "Aucune catégorie disponible.", sentSuccess: "Demande transmise avec succès !",
     welcome: "Bienvenue", connectSub: "Connectez-vous à Glory Aures Portal",
-    heroTitle: "Votre épicerie en ligne de confiance",
+    heroTitle: "Votre societe en ligne de confiance",
     heroDesc: "Découvrez une sélection de produits alimentaires et d'articles de tous les jours de qualité",
     start: "Commencer", featuredCat: "Catégories en vedette", featuredSub: "Explorez notre gamme complète par catégorie",
     backCat: "Retour aux Catégories", backProd: "Retour aux produits", sendReq: "Passer une Demande", dir: "ltr"
@@ -45,7 +45,7 @@ const translations = {
     view: "View", addToCart: "Add to Cart", noProducts: "No items in this cart.",
     noCategories: "No categories available.", sentSuccess: "Request submitted successfully!",
     welcome: "Welcome", connectSub: "Log in to Glory Aures Portal",
-    heroTitle: "Your Trusted Online Grocery",
+    heroTitle: "Your Trusted Online societe",
     heroDesc: "Discover a selection of high-quality food and everyday items",
     start: "Get Started", featuredCat: "Featured Categories", featuredSub: "Explore our complete range by category",
     backCat: "Back to Categories", backProd: "Back to Products", sendReq: "Place a Request", dir: "ltr"
@@ -56,7 +56,7 @@ const translations = {
     view: "عرض", addToCart: "إضافة إلى السلة", noProducts: "لا توجد عناصر في هذه السلة.",
     noCategories: "لا توجد تصنيفات متاحة.", sentSuccess: "تم إرسال الطلب بنجاح!",
     welcome: "مرحباً بك", connectSub: "تسجيل الدخول إلى بوابة Glory Aures",
-    heroTitle: "متجرك الإلكتروني الموثوق عبر الإنترنت",
+    heroTitle: "شركة الإلكترونية الموثوق عبر الإنترنت",
     heroDesc: "اكتشف تشكيلة مختارة من المنتجات الغذائية واليومية عالية الجودة",
     start: "ابدأ الآن", featuredCat: "التصنيفات المميزة", featuredSub: "استكشف مجموعتنا الكاملة حسب التصنيف",
     backCat: "العودة إلى التصنيفات", backProd: "العودة إلى المنتجات", sendReq: "تقديم طلب", dir: "rtl"
@@ -214,11 +214,62 @@ async function handleAuthLogin(e) {
 
 // ==================== REGISTRATION WITH EMAIL VERIFICATION ====================
 
+let pendingRegistration = null;
+let verifyCountdownInterval = null;
+const VERIFY_COUNTDOWN_SECONDS = 60;
+
 function generateMemberId() {
   const num = Math.floor(100000 + Math.random() * 900000);
   return 'GA-' + num;
 }
 
+// ==================== LOGIN ====================
+async function handleAuthLogin(e) {
+  e.preventDefault();
+  
+  const emailInput = document.getElementById('login-email').value.trim();
+  const passwordInput = document.getElementById('login-password').value;
+
+  const btnSubmit = document.getElementById('btn-login-submit');
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.innerText = "Connexion en cours...";
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: emailInput, password: passwordInput })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      localStorage.setItem('user', JSON.stringify(data.user));
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+      }
+
+      showToast('success', `Bienvenue ${data.user.username || ''} !`);
+      setTimeout(() => {
+        renderApp();
+      }, 1000);
+    } else {
+      showToast('error', data.error || 'Erreur de connexion');
+    }
+  } catch (err) {
+    console.error("Login Error:", err);
+    showToast('error', 'Impossible de se connecter au serveur');
+  } finally {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.innerText = "Se connecter";
+    }
+  }
+}
+
+// ==================== REGISTER ====================
 async function handleAuthRegister(e) {
   e.preventDefault();
 
@@ -226,7 +277,6 @@ async function handleAuthRegister(e) {
   const email = document.getElementById('reg-email').value.trim().toLowerCase();
   const password = document.getElementById('reg-password').value.trim();
 
-  // التحقق من المدخلات...
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailPattern.test(email)) {
     showToast('error', "Veuillez saisir une adresse email valide.");
@@ -244,7 +294,6 @@ async function handleAuthRegister(e) {
   }
 
   try {
-    // نغير الرابط إلى مسار التسجيل النهائي المباشر (تأكد من اسم الـ Route في السيرفر، مثلاً /api/register)
     const res = await fetch(`${API_BASE_URL}/api/register`, {
       method: 'POST',
       headers: {
@@ -256,11 +305,10 @@ async function handleAuthRegister(e) {
     const data = await res.json();
 
     if (res.ok) {
-      showToast('success', "Compte créé avec succès !");
-      // توجيه المستخدم لصفحة تسجيل الدخول أو لوحة التحكم
-      setTimeout(() => {
-        window.location.href = 'index.html'; // أو صفحة الـ Dashboard
-      }, 1500);
+      // Stocker les données temporaires pour l'étape de vérification par email
+      pendingRegistration = { username, email, password };
+      showToast('success', "Code de vérification envoyé par email !");
+      showVerificationStep();
     } else if (res.status === 409) {
       showToast('error', data.error || "Cet email ou nom d'utilisateur est déjà utilisé.");
     } else {
@@ -278,18 +326,26 @@ async function handleAuthRegister(e) {
 }
 
 function showVerificationStep() {
-  document.getElementById('auth-step-credentials').classList.add('hidden');
-  document.getElementById('auth-step-verify').classList.remove('hidden');
-  document.getElementById('verify-target-email').innerText = pendingRegistration.email;
-  document.getElementById('verify-code').value = '';
+  const stepCredentials = document.getElementById('auth-step-credentials');
+  const stepVerify = document.getElementById('auth-step-verify');
+  const targetEmail = document.getElementById('verify-target-email');
+  const verifyCode = document.getElementById('verify-code');
+
+  if (stepCredentials) stepCredentials.classList.add('hidden');
+  if (stepVerify) stepVerify.classList.remove('hidden');
+  if (targetEmail && pendingRegistration) targetEmail.innerText = pendingRegistration.email;
+  if (verifyCode) verifyCode.value = '';
   startVerifyCountdown();
 }
 
 function backToRegisterStep() {
   pendingRegistration = null;
   stopVerifyCountdown();
-  document.getElementById('auth-step-verify').classList.add('hidden');
-  document.getElementById('auth-step-credentials').classList.remove('hidden');
+  const stepVerify = document.getElementById('auth-step-verify');
+  const stepCredentials = document.getElementById('auth-step-credentials');
+
+  if (stepVerify) stepVerify.classList.add('hidden');
+  if (stepCredentials) stepCredentials.classList.remove('hidden');
 }
 
 // ==================== EMAIL VERIFICATION COUNTDOWN (1 MINUTE) ====================
@@ -365,7 +421,8 @@ async function resendVerificationCode() {
 async function handleVerifyCode(e) {
   e.preventDefault();
   if (!pendingRegistration) return;
-  const entered = document.getElementById('verify-code').value.trim();
+  const enteredInput = document.getElementById('verify-code');
+  const entered = enteredInput ? enteredInput.value.trim() : '';
 
   try {
     const res = await fetch(`${API_BASE_URL}/api/verify-code`, {
@@ -381,7 +438,7 @@ async function handleVerifyCode(e) {
     }
 
     stopVerifyCountdown();
-    currentUser = data.user || data;
+    const currentUser = data.user || data;
     currentView = 'categories';
     pendingRegistration = null;
     localStorage.setItem('user', JSON.stringify(currentUser));
@@ -446,7 +503,6 @@ function showToast(type, message) {
     setTimeout(() => el.remove(), 350);
   }, 4000);
 }
-
 // ==================== AUTH SCREEN VISUAL EFFECTS ====================
 
 function initAuthVisualEffects() {
